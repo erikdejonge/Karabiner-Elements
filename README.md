@@ -5,6 +5,10 @@
 
 Karabiner-Elements is the subset of the next generation Karabiner for macOS Sierra.
 
+## Karabiner build
+* 22 oktober 2016: [Karabiner-Elements-0.90.37.dmg](https://github.com/erikdejonge/Karabiner-Elements/blob/master/Karabiner-Elements-0.90.37.dmg)
+
+
 ## Project Status
 
 Karabiner-Elements works fine except Preferences GUI.
@@ -34,15 +38,15 @@ Please install Boost into `/opt/local/include/boost`. (eg. `/opt/local/include/b
 
 Clone the source from github.
 
-```
+``` bash
 git clone --depth 1 https://github.com/tekezo/Karabiner-Elements.git
 ```
 
 ### Step 2: Building a package
 
-```
+``` bash
 cd Karabiner-Elements
 make
 ```
 
-The `make` script will create a redistributable **Karabiner-Elements-VERSION.dmg** in the current directory.
+The **make** script will create a redistributable **Karabiner-Elements-VERSION.dmg** in the current directory.
