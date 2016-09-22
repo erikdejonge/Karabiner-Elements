@@ -6,7 +6,7 @@
 Karabiner-Elements is the subset of the next generation Karabiner for macOS Sierra.
 
 ## Karabiner build
-* 22 oktober 2016: [Karabiner-Elements-0.90.37.dmg](https://github.com/erikdejonge/Karabiner-Elements/blob/master/Karabiner-Elements-0.90.37.dmg)
+* 22 oktober 2016: [Karabiner-Elements-0.90.37.dmg](https://raw.githubusercontent.com/erikdejonge/Karabiner-Elements/master/Karabiner-Elements-0.90.37.dmg)
 
 
 ## Project Status
