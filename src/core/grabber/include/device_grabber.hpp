@@ -165,32 +165,11 @@ private:
       return;
     }
 
+    iokit_utility::log_matching_device(logger::get_logger(), device);
+
     auto dev = std::make_unique<human_interface_device>(logger::get_logger(), device);
 
-    auto manufacturer = dev->get_manufacturer();
-    auto product = dev->get_product();
-    auto vendor_id = dev->get_vendor_id();
-    auto product_id = dev->get_product_id();
-    auto location_id = dev->get_location_id();
-    auto serial_number = dev->get_serial_number();
-
-    logger::get_logger().info("matching device: "
-                              "manufacturer:{1}, "
-                              "product:{2}, "
-                              "vendor_id:{3:#x}, "
-                              "product_id:{4:#x}, "
-                              "location_id:{5:#x}, "
-                              "serial_number:{6} "
-                              "registry_entry_id:{7} "
-                              "@ {0}",
-                              __PRETTY_FUNCTION__,
-                              manufacturer ? *manufacturer : "",
-                              product ? *product : "",
-                              vendor_id ? *vendor_id : 0,
-                              product_id ? *product_id : 0,
-                              location_id ? *location_id : 0,
-                              serial_number ? *serial_number : "",
-                              dev->get_registry_entry_id());
+    // ----------------------------------------
 
     if (grabbed_) {
       grab(*dev);
@@ -202,6 +181,12 @@ private:
       std::lock_guard<std::mutex> guard(hids_mutex_);
 
       hids_[device] = std::move(dev);
+    }
+
+    if (is_pointing_device_connected()) {
+      event_manipulator_.create_virtual_hid_manager_client();
+    } else {
+      event_manipulator_.release_virtual_hid_manager_client();
     }
   }
 
@@ -223,6 +208,8 @@ private:
       return;
     }
 
+    iokit_utility::log_removal_device(logger::get_logger(), device);
+
     {
       std::lock_guard<std::mutex> guard(hids_mutex_);
 
@@ -230,33 +217,36 @@ private:
       if (it != hids_.end()) {
         auto& dev = it->second;
         if (dev) {
-          auto vendor_id = dev->get_vendor_id();
-          auto product_id = dev->get_product_id();
-          auto location_id = dev->get_location_id();
-          logger::get_logger().info("removal device: "
-                                    "vendor_id:{1:#x}, "
-                                    "product_id:{2:#x}, "
-                                    "location_id:{3:#x} "
-                                    "@ {0}",
-                                    __PRETTY_FUNCTION__,
-                                    vendor_id ? *vendor_id : 0,
-                                    product_id ? *product_id : 0,
-                                    location_id ? *location_id : 0);
-
           hids_.erase(it);
         }
       }
+    }
+
+    if (is_pointing_device_connected()) {
+      event_manipulator_.create_virtual_hid_manager_client();
+    } else {
+      event_manipulator_.release_virtual_hid_manager_client();
     }
 
     event_manipulator_.stop_key_repeat();
   }
 
   void observe(human_interface_device& hid) {
+    auto manufacturer = hid.get_manufacturer();
+    if (manufacturer && *manufacturer == "pqrs.org") {
+      return;
+    }
+
     human_interface_device::value_callback callback;
     hid.observe(callback);
   }
 
   void unobserve(human_interface_device& hid) {
+    auto manufacturer = hid.get_manufacturer();
+    if (manufacturer && *manufacturer == "pqrs.org") {
+      return;
+    }
+
     hid.unobserve();
   }
 
@@ -316,6 +306,43 @@ private:
       }
       break;
 
+    case kHIDPage_Button:
+      event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                               krbn::pointing_event::button,
+                                               krbn::pointing_button(usage),
+                                               integer_value);
+      break;
+
+    case kHIDPage_GenericDesktop:
+      if (usage == kHIDUsage_GD_X) {
+        event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                                 krbn::pointing_event::x,
+                                                 boost::none,
+                                                 integer_value);
+      }
+      if (usage == kHIDUsage_GD_Y) {
+        event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                                 krbn::pointing_event::y,
+                                                 boost::none,
+                                                 integer_value);
+      }
+      if (usage == kHIDUsage_GD_Wheel) {
+        event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                                 krbn::pointing_event::vertical_wheel,
+                                                 boost::none,
+                                                 integer_value);
+      }
+      break;
+
+    case kHIDPage_Consumer:
+      if (usage == kHIDUsage_Csmr_ACPan) {
+        event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                                 krbn::pointing_event::horizontal_wheel,
+                                                 boost::none,
+                                                 integer_value);
+      }
+      break;
+
     default:
       break;
     }
@@ -323,6 +350,7 @@ private:
     // reset modifier_flags state if all keys are released.
     if (get_all_devices_pressed_keys_count() == 0) {
       event_manipulator_.reset_modifier_flag_state();
+      event_manipulator_.reset_pointing_button_state();
     }
   }
 
@@ -350,6 +378,28 @@ private:
       total += (it.second)->get_pressed_keys_count();
     }
     return total;
+  }
+
+  bool is_keyboard_connected(void) {
+    std::lock_guard<std::mutex> guard(hids_mutex_);
+
+    for (const auto& it : hids_) {
+      if ((it.second)->is_keyboard()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool is_pointing_device_connected(void) {
+    std::lock_guard<std::mutex> guard(hids_mutex_);
+
+    for (const auto& it : hids_) {
+      if ((it.second)->is_pointing_device()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void cancel_grab_timer(void) {

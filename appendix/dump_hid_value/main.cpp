@@ -38,6 +38,8 @@ public:
 
     auto device_matching_dictionaries = iokit_utility::create_device_matching_dictionaries({
         std::make_pair(kHIDPage_GenericDesktop, kHIDUsage_GD_Keyboard),
+        std::make_pair(kHIDPage_GenericDesktop, kHIDUsage_GD_Mouse),
+        std::make_pair(kHIDPage_GenericDesktop, kHIDUsage_GD_Pointer),
     });
     if (device_matching_dictionaries) {
       IOHIDManagerSetDeviceMatchingMultiple(manager_, device_matching_dictionaries);
@@ -69,31 +71,10 @@ private:
       return;
     }
 
+    iokit_utility::log_matching_device(logger::get_logger(), device);
+
     hids_[device] = std::make_unique<human_interface_device>(logger::get_logger(), device);
     auto& dev = hids_[device];
-
-    auto manufacturer = dev->get_manufacturer();
-    auto product = dev->get_product();
-    auto vendor_id = dev->get_vendor_id();
-    auto product_id = dev->get_product_id();
-    auto location_id = dev->get_location_id();
-    auto serial_number = dev->get_serial_number();
-
-    logger::get_logger().info("matching device: "
-                              "manufacturer:{1}, "
-                              "product:{2}, "
-                              "vendor_id:{3:#x}, "
-                              "product_id:{4:#x}, "
-                              "location_id:{5:#x}, "
-                              "serial_number:{6} "
-                              "@ {0}",
-                              __PRETTY_FUNCTION__,
-                              manufacturer ? *manufacturer : "",
-                              product ? *product : "",
-                              vendor_id ? *vendor_id : 0,
-                              product_id ? *product_id : 0,
-                              location_id ? *location_id : 0,
-                              serial_number ? *serial_number : "");
 
     dev->observe(boost::bind(&dump_hid_value::value_callback, this, _1, _2, _3, _4, _5, _6));
   }
@@ -116,23 +97,12 @@ private:
       return;
     }
 
+    iokit_utility::log_removal_device(logger::get_logger(), device);
+
     auto it = hids_.find(device);
     if (it != hids_.end()) {
       auto& dev = it->second;
       if (dev) {
-        auto vendor_id = dev->get_vendor_id();
-        auto product_id = dev->get_product_id();
-        auto location_id = dev->get_location_id();
-        logger::get_logger().info("removal device: "
-                                  "vendor_id:{1:#x}, "
-                                  "product_id:{2:#x}, "
-                                  "location_id:{3:#x} "
-                                  "@ {0}",
-                                  __PRETTY_FUNCTION__,
-                                  vendor_id ? *vendor_id : 0,
-                                  product_id ? *product_id : 0,
-                                  location_id ? *location_id : 0);
-
         hids_.erase(it);
       }
     }
@@ -144,6 +114,31 @@ private:
                       uint32_t usage_page,
                       uint32_t usage,
                       CFIndex integer_value) {
+    if (usage_page == kHIDPage_Button) {
+      std::cout << "Button: " << std::dec << usage << " (" << integer_value << ")" << std::endl;
+      return;
+    }
+    if (usage_page == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_X) {
+      std::cout << "Pointing X: " << std::dec << integer_value << std::endl;
+      return;
+    }
+    if (usage_page == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_Y) {
+      std::cout << "Pointing Y: " << std::dec << integer_value << std::endl;
+      return;
+    }
+    if (usage_page == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_Y) {
+      std::cout << "Pointing Z: " << std::dec << integer_value << std::endl;
+      return;
+    }
+    if (usage_page == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_Wheel) {
+      std::cout << "Wheel: " << std::dec << integer_value << std::endl;
+      return;
+    }
+    if (usage_page == kHIDPage_Consumer && usage == kHIDUsage_Csmr_ACPan) {
+      std::cout << "Horizontal Wheel: " << std::dec << integer_value << std::endl;
+      return;
+    }
+
     std::cout << "element" << std::endl
               << "  usage_page:0x" << std::hex << usage_page << std::endl
               << "  usage:0x" << std::hex << usage << std::endl

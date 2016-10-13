@@ -70,18 +70,19 @@ public:
   bool is_loaded(void) const { return loaded_; }
 
   // std::vector<from,to>
-  std::vector<std::pair<krbn::key_code, krbn::key_code>> get_current_profile_simple_modifications(void) const {
+  std::vector<std::pair<krbn::key_code, krbn::key_code>> get_current_profile_simple_modifications(void) {
     auto profile = get_current_profile();
     return get_key_code_pair_from_json_object(profile["simple_modifications"]);
   }
 
   // std::vector<f1,vk_consumer_brightness_down>
-  std::vector<std::pair<krbn::key_code, krbn::key_code>> get_current_profile_fn_function_keys(void) const {
+  std::vector<std::pair<krbn::key_code, krbn::key_code>> get_current_profile_fn_function_keys(void) {
     auto profile = get_current_profile();
-    if (!profile["fn_function_keys"].is_object()) {
-      profile = get_default_profile();
-    }
     return get_key_code_pair_from_json_object(profile["fn_function_keys"]);
+  }
+
+  std::string get_current_profile_json(void) {
+    return get_current_profile().dump();
   }
 
   // Note:
@@ -121,10 +122,16 @@ private:
     return json;
   }
 
-  nlohmann::json get_current_profile(void) const {
+  nlohmann::json get_current_profile(void) {
     if (json_.is_object() && json_["profiles"].is_array()) {
-      for (const auto& profile : json_["profiles"]) {
+      for (auto&& profile : json_["profiles"]) {
         if (profile.is_object() && profile["selected"]) {
+          // Use default value if fn_function_keys is not set.
+          if (!profile["fn_function_keys"].is_object()) {
+            auto default_profile = get_default_profile();
+            profile["fn_function_keys"] = default_profile["fn_function_keys"];
+          }
+
           return profile;
         }
       }
@@ -132,7 +139,7 @@ private:
     return get_default_profile();
   }
 
-  std::vector<std::pair<krbn::key_code, krbn::key_code>> get_key_code_pair_from_json_object(const nlohmann::json& json) const {
+  std::vector<std::pair<krbn::key_code, krbn::key_code>> get_key_code_pair_from_json_object(const nlohmann::json& json) {
     std::vector<std::pair<krbn::key_code, krbn::key_code>> v;
 
     auto profile = get_current_profile();

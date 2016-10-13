@@ -2,10 +2,10 @@
 
 * `karabiner_grabber`
   * Run with root privilege.
-  * Seize the input devices and modify events then post events using CGEventPost or `karabiner_event_dispatcher`.
+  * Seize the input devices and modify events then post events using `karabiner_event_dispatcher`.
 * `karabiner_event_dispatcher`
   * Launch with root privilege. And then change uid to console user.
-  * Receive media control events from `karabiner_grabber` and post them to IOHIDSystem.
+  * Receive key events from `karabiner_grabber` and post them to IOHIDSystem.
 * `karabiner_console_user_server`
   * Run with console user privilege.
   * Monitor system preferences values (key repeat, etc) and notify them to `karabiner_grabber`.
@@ -74,18 +74,6 @@ Thus, `karabiner_grabber` uses this method to modify mouse events.
 
 # The difference of event posting methods
 
-## CGEventPost
-
-It requires posting coregraphics events.<br />
-
-`karabiner_grabber` uses this method to post generic key events.
-
-However, there is a limitation that the mouse events will ignore modifier flags by CGEventPost.
-For example, even if we pressed the command key (and the kCGEventFlagMaskCommand is sent by CGEventPost),
-the mouse click event will be treated as click without any modifier flags. (not command+click)
-Thus, we should manage the mouse event's modifier flags manually.
-`karabiner_grabber` uses CGEventTapCreate to modify mouse events.
-
 ## IOHIDPostEvent
 
 It requires posting coregraphics events.<br />
@@ -101,6 +89,17 @@ the mouse click event will be treated as click without any modifier flags. (not 
 Thus, we should manage the mouse event's modifier flags manually.
 `karabiner_grabber` uses CGEventTapCreate to modify mouse events.
 
+## CGEventPost
+
+It requires posting coregraphics events.<br />
+
+`CGEventPost` does not support some key events in OS X 10.12.
+
+* Mission Control key
+* Launchpad key
+* Option-Command-Escape
+
+Thus, `karabiner_grabber` does not use `CGEventPost`.
 
 ## IOKit device report in kext
 

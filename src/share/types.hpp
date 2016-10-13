@@ -4,7 +4,6 @@
 
 #include "system_preferences.hpp"
 #include <CoreFoundation/CoreFoundation.h>
-#include <CoreGraphics/CoreGraphics.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/hid/IOHIDUsageTables.h>
 #include <IOKit/hidsystem/IOHIDShared.h>
@@ -31,6 +30,7 @@ enum class operation_type : uint8_t {
   // grabber -> event_dispatcher
   set_caps_lock_state,
   refresh_caps_lock_led,
+  post_modifier_flags,
   post_key,
 };
 
@@ -129,6 +129,53 @@ enum class key_code : uint32_t {
 };
 
 enum class pointing_button : uint32_t {
+  zero,
+
+  button1,
+  button2,
+  button3,
+  button4,
+  button5,
+  button6,
+  button7,
+  button8,
+
+  button9,
+  button10,
+  button11,
+  button12,
+  button13,
+  button14,
+  button15,
+  button16,
+
+  button17,
+  button18,
+  button19,
+  button20,
+  button21,
+  button22,
+  button23,
+  button24,
+
+  button25,
+  button26,
+  button27,
+  button28,
+  button29,
+  button30,
+  button31,
+  button32,
+
+  end_,
+};
+
+enum class pointing_event : uint32_t {
+  button,
+  x,
+  y,
+  vertical_wheel,
+  horizontal_wheel,
 };
 
 enum class modifier_flag : uint32_t {
@@ -369,6 +416,7 @@ public:
 
           // Extra
           {"fn", key_code::vk_fn_modifier},
+          {"vk_none", key_code::vk_none},
           {"vk_consumer_brightness_down", key_code::vk_consumer_brightness_down},
           {"vk_consumer_brightness_up", key_code::vk_consumer_brightness_up},
           {"vk_consumer_illumination_down", key_code::vk_consumer_illumination_down},
@@ -402,8 +450,8 @@ public:
   }
 
   // hid usage -> CoreGraphics key code
-  static const std::unordered_map<key_code, CGKeyCode>& get_cg_key_map(void) {
-    static std::unordered_map<key_code, CGKeyCode> map;
+  static const std::unordered_map<key_code, uint8_t>& get_hid_system_key_map(void) {
+    static std::unordered_map<key_code, uint8_t> map;
     if (map.empty()) {
       map[key_code(kHIDUsage_KeyboardA)] = 0x0;
       map[key_code(kHIDUsage_KeyboardB)] = 0xb;
@@ -511,7 +559,7 @@ public:
       map[key_code(kHIDUsage_KeyboardNonUSBackslash)] = 0xa;
       map[key_code(kHIDUsage_KeyboardApplication)] = 0x6e;
 
-      // map[key_code(kHIDUsage_KeyboardPower)] => get_hid_aux_control_button_map
+      // map[key_code(kHIDUsage_KeyboardPower)] => get_hid_system_aux_control_button_map
 
       map[key_code(kHIDUsage_KeypadEqualSign)] = 0x51;
 
@@ -539,9 +587,9 @@ public:
       // map[key_code(kHIDUsage_KeyboardCopy)] = mac ignores this key
       // map[key_code(kHIDUsage_KeyboardPaste)] = mac ignores this key
       // map[key_code(kHIDUsage_KeyboardFind)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardMute)] => get_hid_aux_control_button_map
-      // map[key_code(kHIDUsage_KeyboardVolumeUp)] => get_hid_aux_control_button_map
-      // map[key_code(kHIDUsage_KeyboardVolumeDown)] => get_hid_aux_control_button_map
+      // map[key_code(kHIDUsage_KeyboardMute)] => get_hid_system_aux_control_button_map
+      // map[key_code(kHIDUsage_KeyboardVolumeUp)] => get_hid_system_aux_control_button_map
+      // map[key_code(kHIDUsage_KeyboardVolumeDown)] => get_hid_system_aux_control_button_map
 
       // map[key_code(kHIDUsage_KeyboardLockingCapsLock)] => mac ignores this key
       // map[key_code(kHIDUsage_KeyboardLockingNumLock)] => ??
@@ -592,23 +640,6 @@ public:
       map[key_code(kHIDUsage_KeyboardRightGUI)] = 0x36;
 
       map[key_code::vk_fn_modifier] = 0x3f;
-    }
-    return map;
-  }
-
-  static boost::optional<CGKeyCode> get_cg_key(key_code key_code) {
-    auto& map = get_cg_key_map();
-    auto it = map.find(key_code);
-    if (it == map.end()) {
-      return boost::none;
-    }
-    return it->second;
-  }
-
-  static const std::unordered_map<key_code, uint8_t>& get_hid_system_key_map(void) {
-    static std::unordered_map<key_code, uint8_t> map;
-    if (map.empty()) {
-      // These keys are not supported in CGEventPost in OS X 10.12.
       map[key_code::vk_dashboard] = 0x82;
       map[key_code::vk_launchpad] = 0x83;
       map[key_code::vk_mission_control] = 0xa0;
@@ -715,6 +746,14 @@ struct operation_type_refresh_caps_lock_led_struct {
   operation_type_refresh_caps_lock_led_struct(void) : operation_type(operation_type::refresh_caps_lock_led) {}
 
   const operation_type operation_type;
+};
+
+struct operation_type_post_modifier_flags_struct {
+  operation_type_post_modifier_flags_struct(void) : operation_type(operation_type::post_modifier_flags) {}
+
+  const operation_type operation_type;
+  key_code key_code;
+  IOOptionBits flags;
 };
 
 struct operation_type_post_key_struct {
