@@ -1,6 +1,7 @@
 #pragma once
 
 #include "filesystem.hpp"
+#include "gcd_utility.hpp"
 #include <CoreServices/CoreServices.h>
 #include <spdlog/spdlog.h>
 #include <utility>
@@ -29,11 +30,7 @@ public:
           CFArrayAppendValue(directories_, directory);
           CFRelease(directory);
 
-          for (const auto& file : target.second) {
-            auto f = file;
-            filesystem::normalize_file_path(f);
-            files_.push_back(f);
-          }
+          files_ = target.second;
         }
       }
       register_stream();
@@ -86,12 +83,15 @@ private:
   }
 
   void unregister_stream(void) {
-    if (stream_) {
-      FSEventStreamStop(stream_);
-      FSEventStreamInvalidate(stream_);
-      FSEventStreamRelease(stream_);
-      stream_ = nullptr;
-    }
+    // Release stream_ in main thread to avoid callback invocations after object has been destroyed.
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      if (stream_) {
+        FSEventStreamStop(stream_);
+        FSEventStreamInvalidate(stream_);
+        FSEventStreamRelease(stream_);
+        stream_ = nullptr;
+      }
+    });
   }
 
   static void static_stream_callback(ConstFSEventStreamRef stream,
@@ -121,13 +121,17 @@ private:
         register_stream();
 
       } else {
-        std::string path = event_paths[i];
-        filesystem::normalize_file_path(path);
+        // FSEvents passes realpathed file path to callback.
+        // Thus, we have to compare realpathed file paths.
 
-        for (const auto& file : files_) {
-          if (file == path) {
-            if (callback_) {
-              callback_(path);
+        if (auto event_path = filesystem::realpath(event_paths[i])) {
+          for (const auto& file : files_) {
+            if (auto path = filesystem::realpath(file)) {
+              if (*event_path == *path) {
+                if (callback_) {
+                  callback_(*event_path);
+                }
+              }
             }
           }
         }

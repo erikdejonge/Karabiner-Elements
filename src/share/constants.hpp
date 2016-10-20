@@ -23,6 +23,10 @@ public:
     return "/Library/Application Support/org.pqrs/tmp/karabiner_event_dispatcher_receiver";
   }
 
+  static const char* get_devices_json_file_path(void) {
+    return "/Library/Application Support/org.pqrs/tmp/devices.json";
+  }
+
   static const char* get_home_dot_karabiner_directory(void) {
     static std::mutex mutex;
     static bool once = false;
@@ -64,6 +68,28 @@ public:
       return nullptr;
     } else {
       return directory.c_str();
+    }
+  }
+
+  static const char* get_configuration_core_file_path(void) {
+    static std::mutex mutex;
+    static bool once = false;
+    static std::string file_path;
+
+    std::lock_guard<std::mutex> guard(mutex);
+
+    if (!once) {
+      once = true;
+      if (auto p = get_configuration_directory()) {
+        file_path = p;
+        file_path += "/karabiner.json";
+      }
+    }
+
+    if (file_path.empty()) {
+      return nullptr;
+    } else {
+      return file_path.c_str();
     }
   }
 

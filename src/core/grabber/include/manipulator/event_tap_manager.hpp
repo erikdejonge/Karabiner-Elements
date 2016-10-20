@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gcd_utility.hpp"
 #include "logger.hpp"
 #include "modifier_flag_manager.hpp"
 #include <CoreGraphics/CoreGraphics.h>
@@ -46,20 +47,22 @@ public:
   }
 
   ~event_tap_manager(void) {
-    if (event_tap_) {
-      CGEventTapEnable(event_tap_, false);
+    // Release event_tap_ in main thread to avoid callback invocations after object has been destroyed.
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      if (event_tap_) {
+        CGEventTapEnable(event_tap_, false);
 
-      if (run_loop_source_) {
-        CFRunLoopRemoveSource(CFRunLoopGetMain(), run_loop_source_, kCFRunLoopCommonModes);
-        CFRelease(run_loop_source_);
-        run_loop_source_ = nullptr;
+        if (run_loop_source_) {
+          CFRunLoopRemoveSource(CFRunLoopGetMain(), run_loop_source_, kCFRunLoopCommonModes);
+          CFRelease(run_loop_source_);
+          run_loop_source_ = nullptr;
+        }
+
+        CFRelease(event_tap_);
+        event_tap_ = nullptr;
       }
-
-      CFRelease(event_tap_);
-      event_tap_ = nullptr;
-    }
-
-    logger::get_logger().info("event_tap_manager ungrabbed mouse events");
+      logger::get_logger().info("event_tap_manager ungrabbed mouse events");
+    });
   }
 
 private:
@@ -72,8 +75,11 @@ private:
   }
 
   CGEventRef _Nullable callback(CGEventTapProxy _Nullable proxy, CGEventType type, CGEventRef _Nullable event) {
-    if (event) {
-      CGEventSetFlags(event, modifier_flag_manager_.get_cg_event_flags(CGEventGetFlags(event), krbn::key_code::vk_none));
+    if (type == kCGEventTapDisabledByTimeout) {
+      logger::get_logger().info("Re-enable event_tap_ by kCGEventTapDisabledByTimeout");
+      CGEventTapEnable(event_tap_, true);
+    } else if (event) {
+      CGEventSetFlags(event, modifier_flag_manager_.get_cg_event_flags_for_mouse_events());
     }
     return event;
   }

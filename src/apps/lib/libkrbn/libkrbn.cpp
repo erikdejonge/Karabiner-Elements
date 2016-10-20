@@ -1,25 +1,12 @@
 #include "libkrbn.h"
 #include "constants.hpp"
-#include <thread>
-#include <vector>
+#include "libkrbn.hpp"
+#include "thread_utility.hpp"
+#include <iostream>
 
-class libkrbn {
-public:
-  static bool cfstring_to_cstring(std::vector<char>& v, CFStringRef string) {
-    if (string) {
-      if (auto cstring = CFStringGetCStringPtr(string, kCFStringEncodingUTF8)) {
-        auto length = strlen(cstring) + 1;
-        v.resize(length);
-        strlcpy(&(v[0]), cstring, length);
-        return true;
-      }
-    }
-
-    v.resize(1);
-    v[0] = '\0';
-    return false;
-  }
-};
+void libkrbn_initialize(void) {
+  thread_utility::register_main_thread();
+}
 
 const char* libkrbn_get_distributed_notification_observed_object(void) {
   static std::mutex mutex;
@@ -49,4 +36,8 @@ const char* libkrbn_get_distributed_notification_grabber_is_launched(void) {
   }
 
   return &(result[0]);
+}
+
+const char* libkrbn_get_configuration_core_file_path(void) {
+  return constants::get_configuration_core_file_path();
 }

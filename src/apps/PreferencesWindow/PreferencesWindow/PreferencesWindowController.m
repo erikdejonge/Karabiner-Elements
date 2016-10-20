@@ -1,22 +1,32 @@
 #import "PreferencesWindowController.h"
+#import "FnFunctionKeysTableViewController.h"
 #import "LogFileTextViewController.h"
+#import "SimpleModificationsMenuManager.h"
+#import "SimpleModificationsTableViewController.h"
 #import "UpdaterController.h"
 
 @interface PreferencesWindowController ()
 
-@property(weak) IBOutlet LogFileTextViewController* consoleUserServerLogFileTextViewController;
-@property(weak) IBOutlet LogFileTextViewController* grabberLogFileTextViewController;
+@property(weak) IBOutlet FnFunctionKeysTableViewController* fnFunctionKeysTableViewController;
+@property(weak) IBOutlet LogFileTextViewController* logFileTextViewController;
+@property(weak) IBOutlet NSTableView* simpleModificationsTableView;
 @property(weak) IBOutlet NSTextField* versionLabel;
+@property(weak) IBOutlet SimpleModificationsMenuManager* simpleModificationsMenuManager;
+@property(weak) IBOutlet SimpleModificationsTableViewController* simpleModificationsTableViewController;
 
 @end
 
 @implementation PreferencesWindowController
 
 - (void)setup {
+  [self.simpleModificationsMenuManager setup];
+  [self.simpleModificationsTableViewController setup];
+  [self.fnFunctionKeysTableViewController setup];
+
   self.versionLabel.stringValue = [[NSBundle mainBundle] infoDictionary][@"CFBundleVersion"];
 
-  [self.grabberLogFileTextViewController monitor:@"/var/log/karabiner/grabber_log.txt"];
-  [self.consoleUserServerLogFileTextViewController monitor:[NSString stringWithFormat:@"%@/.karabiner.d/log/console_user_server_log.txt", NSHomeDirectory()]];
+  [self.simpleModificationsTableView reloadData];
+  [self.logFileTextViewController monitor];
 
   [self launchctlConsoleUserServer:YES];
 }

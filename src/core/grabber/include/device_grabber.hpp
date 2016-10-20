@@ -3,12 +3,17 @@
 #include "apple_hid_usage_tables.hpp"
 #include "constants.hpp"
 #include "event_manipulator.hpp"
+#include "gcd_utility.hpp"
 #include "human_interface_device.hpp"
 #include "iokit_utility.hpp"
+#include "iopm_client.hpp"
 #include "logger.hpp"
 #include "manipulator.hpp"
+#include "spdlog_utility.hpp"
 #include "types.hpp"
 #include <IOKit/hid/IOHIDManager.h>
+#include <fstream>
+#include <json/json.hpp>
 #include <thread>
 #include <time.h>
 
@@ -17,9 +22,11 @@ public:
   device_grabber(const device_grabber&) = delete;
 
   device_grabber(manipulator::event_manipulator& event_manipulator) : event_manipulator_(event_manipulator),
-                                                                      queue_(dispatch_queue_create(nullptr, nullptr)),
                                                                       grab_timer_(0),
-                                                                      grabbed_(false) {
+                                                                      mode_(mode::observing),
+                                                                      grabbed_(false),
+                                                                      is_grabbable_callback_log_reducer_(logger::get_logger()),
+                                                                      suspended_(false) {
     manager_ = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
     if (!manager_) {
       logger::get_logger().error("{0}: failed to IOHIDManagerCreate", __PRETTY_FUNCTION__);
@@ -40,54 +47,54 @@ public:
 
       IOHIDManagerScheduleWithRunLoop(manager_, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
     }
+
+    iopm_client_ = std::make_unique<iopm_client>(logger::get_logger(),
+                                                 std::bind(&device_grabber::iopm_client_callback, this, std::placeholders::_1));
   }
 
   ~device_grabber(void) {
-    cancel_grab_timer();
+    // Release manager_ in main thread to avoid callback invocations after object has been destroyed.
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      iopm_client_ = nullptr;
 
-    if (manager_) {
-      IOHIDManagerUnscheduleFromRunLoop(manager_, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
-      CFRelease(manager_);
-      manager_ = nullptr;
-    }
+      ungrab_devices();
 
-    dispatch_release(queue_);
+      if (manager_) {
+        IOHIDManagerUnscheduleFromRunLoop(manager_, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+        CFRelease(manager_);
+        manager_ = nullptr;
+      }
+    });
   }
 
-  void grab_devices(void) {
-    auto __block last_warning_message_time = ::time(nullptr) - 1;
+  void grab_devices(bool change_mode = true) {
+    std::lock_guard<std::mutex> guard(grab_mutex_);
+
+    if (change_mode) {
+      mode_ = mode::grabbing;
+    }
 
     cancel_grab_timer();
 
     // ----------------------------------------
     // setup grab_timer_
 
-    std::lock_guard<std::mutex> guard(grab_timer_mutex_);
-
-    grab_timer_ = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue_);
+    grab_timer_ = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue_.get());
     dispatch_source_set_timer(grab_timer_, dispatch_time(DISPATCH_TIME_NOW, 0.1 * NSEC_PER_SEC), 0.1 * NSEC_PER_SEC, 0);
     dispatch_source_set_event_handler(grab_timer_, ^{
+      std::lock_guard<std::mutex> grab_guard(grab_mutex_);
+
       if (grabbed_) {
         return;
       }
 
-      std::string warning_message;
-
-      if (!event_manipulator_.is_ready()) {
-        warning_message = "event_manipulator_ is not ready. Please wait for a while.";
-      }
-
-      if (auto product_name = get_key_pressed_device_product_name()) {
-        warning_message = std::string("There are pressed down keys in ") + *product_name + ". Please release them.";
-      }
-
-      if (!warning_message.empty()) {
-        auto time = ::time(nullptr);
-        if (last_warning_message_time != time) {
-          last_warning_message_time = time;
-          logger::get_logger().warn(warning_message);
+      {
+        std::lock_guard<std::mutex> hids_guard(hids_mutex_);
+        for (const auto& it : hids_) {
+          if (!(it.second)->is_grabbable()) {
+            return;
+          }
         }
-        return;
       }
 
       // ----------------------------------------
@@ -107,14 +114,20 @@ public:
       event_manipulator_.reset();
       event_manipulator_.grab_mouse_events();
 
-      logger::get_logger().info("devices are grabbed");
+      logger::get_logger().info("Connected devices are grabbed");
 
       cancel_grab_timer();
     });
     dispatch_resume(grab_timer_);
   }
 
-  void ungrab_devices(void) {
+  void ungrab_devices(bool change_mode = true) {
+    std::lock_guard<std::mutex> guard(grab_mutex_);
+
+    if (change_mode) {
+      mode_ = mode::observing;
+    }
+
     if (!grabbed_) {
       return;
     }
@@ -124,7 +137,7 @@ public:
     cancel_grab_timer();
 
     {
-      std::lock_guard<std::mutex> guard(hids_mutex_);
+      std::lock_guard<std::mutex> hids_guard(hids_mutex_);
 
       for (auto&& it : hids_) {
         ungrab(*(it.second));
@@ -135,7 +148,35 @@ public:
     event_manipulator_.ungrab_mouse_events();
     event_manipulator_.reset();
 
-    logger::get_logger().info("devices are ungrabbed");
+    logger::get_logger().info("Connected devices are ungrabbed");
+  }
+
+  void suspend(void) {
+    std::lock_guard<std::mutex> guard(suspend_mutex_);
+
+    if (!suspended_) {
+      logger::get_logger().info("device_grabber::suspend");
+
+      suspended_ = true;
+
+      if (mode_ == mode::grabbing) {
+        ungrab_devices(false);
+      }
+    }
+  }
+
+  void resume(void) {
+    std::lock_guard<std::mutex> guard(suspend_mutex_);
+
+    if (suspended_) {
+      logger::get_logger().info("device_grabber::resume");
+
+      suspended_ = false;
+
+      if (mode_ == mode::grabbing) {
+        grab_devices(false);
+      }
+    }
   }
 
   void set_caps_lock_led_state(krbn::led_state state) {
@@ -147,6 +188,26 @@ public:
   }
 
 private:
+  enum class mode {
+    observing,
+    grabbing,
+  };
+
+  void iopm_client_callback(uint32_t message_type) {
+    switch (message_type) {
+    case kIOMessageSystemWillSleep:
+      suspend();
+      break;
+
+    case kIOMessageSystemWillPowerOn:
+      resume();
+      break;
+
+    default:
+      break;
+    }
+  }
+
   static void static_device_matching_callback(void* _Nullable context, IOReturn result, void* _Nullable sender, IOHIDDeviceRef _Nonnull device) {
     if (result != kIOReturnSuccess) {
       return;
@@ -165,32 +226,12 @@ private:
       return;
     }
 
+    iokit_utility::log_matching_device(logger::get_logger(), device);
+
     auto dev = std::make_unique<human_interface_device>(logger::get_logger(), device);
+    dev->set_is_grabbable_callback(std::bind(&device_grabber::is_grabbable_callback, this, std::placeholders::_1));
 
-    auto manufacturer = dev->get_manufacturer();
-    auto product = dev->get_product();
-    auto vendor_id = dev->get_vendor_id();
-    auto product_id = dev->get_product_id();
-    auto location_id = dev->get_location_id();
-    auto serial_number = dev->get_serial_number();
-
-    logger::get_logger().info("matching device: "
-                              "manufacturer:{1}, "
-                              "product:{2}, "
-                              "vendor_id:{3:#x}, "
-                              "product_id:{4:#x}, "
-                              "location_id:{5:#x}, "
-                              "serial_number:{6} "
-                              "registry_entry_id:{7} "
-                              "@ {0}",
-                              __PRETTY_FUNCTION__,
-                              manufacturer ? *manufacturer : "",
-                              product ? *product : "",
-                              vendor_id ? *vendor_id : 0,
-                              product_id ? *product_id : 0,
-                              location_id ? *location_id : 0,
-                              serial_number ? *serial_number : "",
-                              dev->get_registry_entry_id());
+    // ----------------------------------------
 
     if (grabbed_) {
       grab(*dev);
@@ -202,6 +243,14 @@ private:
       std::lock_guard<std::mutex> guard(hids_mutex_);
 
       hids_[device] = std::move(dev);
+    }
+
+    output_devices_json();
+
+    if (is_pointing_device_connected()) {
+      event_manipulator_.create_virtual_hid_manager_client();
+    } else {
+      event_manipulator_.release_virtual_hid_manager_client();
     }
   }
 
@@ -223,6 +272,8 @@ private:
       return;
     }
 
+    iokit_utility::log_removal_device(logger::get_logger(), device);
+
     {
       std::lock_guard<std::mutex> guard(hids_mutex_);
 
@@ -230,33 +281,38 @@ private:
       if (it != hids_.end()) {
         auto& dev = it->second;
         if (dev) {
-          auto vendor_id = dev->get_vendor_id();
-          auto product_id = dev->get_product_id();
-          auto location_id = dev->get_location_id();
-          logger::get_logger().info("removal device: "
-                                    "vendor_id:{1:#x}, "
-                                    "product_id:{2:#x}, "
-                                    "location_id:{3:#x} "
-                                    "@ {0}",
-                                    __PRETTY_FUNCTION__,
-                                    vendor_id ? *vendor_id : 0,
-                                    product_id ? *product_id : 0,
-                                    location_id ? *location_id : 0);
-
           hids_.erase(it);
         }
       }
+    }
+
+    output_devices_json();
+
+    if (is_pointing_device_connected()) {
+      event_manipulator_.create_virtual_hid_manager_client();
+    } else {
+      event_manipulator_.release_virtual_hid_manager_client();
     }
 
     event_manipulator_.stop_key_repeat();
   }
 
   void observe(human_interface_device& hid) {
+    auto manufacturer = hid.get_manufacturer();
+    if (manufacturer && *manufacturer == "pqrs.org") {
+      return;
+    }
+
     human_interface_device::value_callback callback;
     hid.observe(callback);
   }
 
   void unobserve(human_interface_device& hid) {
+    auto manufacturer = hid.get_manufacturer();
+    if (manufacturer && *manufacturer == "pqrs.org") {
+      return;
+    }
+
     hid.unobserve();
   }
 
@@ -301,45 +357,66 @@ private:
 
     auto device_registry_entry_id = manipulator::device_registry_entry_id(device.get_registry_entry_id());
 
-    switch (usage_page) {
-    case kHIDPage_KeyboardOrKeypad:
-      if (kHIDUsage_KeyboardErrorUndefined < usage && usage < kHIDUsage_Keyboard_Reserved) {
-        bool pressed = integer_value;
-        event_manipulator_.handle_keyboard_event(device_registry_entry_id, krbn::key_code(usage), pressed);
-      }
-      break;
+    if (auto key_code = krbn::types::get_key_code(usage_page, usage)) {
+      bool pressed = integer_value;
+      event_manipulator_.handle_keyboard_event(device_registry_entry_id, *key_code, pressed);
 
-    case kHIDPage_AppleVendorTopCase:
-      if (usage == kHIDUsage_AV_TopCase_KeyboardFn) {
-        bool pressed = integer_value;
-        event_manipulator_.handle_keyboard_event(device_registry_entry_id, krbn::key_code::vk_fn_modifier, pressed);
-      }
-      break;
+    } else if (auto pointing_button = krbn::types::get_pointing_button(usage_page, usage)) {
+      event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                               krbn::pointing_event::button,
+                                               *pointing_button,
+                                               integer_value);
 
-    default:
-      break;
+    } else {
+      switch (usage_page) {
+      case kHIDPage_GenericDesktop:
+        if (usage == kHIDUsage_GD_X) {
+          event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                                   krbn::pointing_event::x,
+                                                   boost::none,
+                                                   integer_value);
+        }
+        if (usage == kHIDUsage_GD_Y) {
+          event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                                   krbn::pointing_event::y,
+                                                   boost::none,
+                                                   integer_value);
+        }
+        if (usage == kHIDUsage_GD_Wheel) {
+          event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                                   krbn::pointing_event::vertical_wheel,
+                                                   boost::none,
+                                                   integer_value);
+        }
+        break;
+
+      case kHIDPage_Consumer:
+        if (usage == kHIDUsage_Csmr_ACPan) {
+          event_manipulator_.handle_pointing_event(device_registry_entry_id,
+                                                   krbn::pointing_event::horizontal_wheel,
+                                                   boost::none,
+                                                   integer_value);
+        }
+        break;
+
+      default:
+        break;
+      }
     }
 
     // reset modifier_flags state if all keys are released.
     if (get_all_devices_pressed_keys_count() == 0) {
       event_manipulator_.reset_modifier_flag_state();
+      event_manipulator_.reset_pointing_button_state();
     }
   }
 
-  boost::optional<std::string> get_key_pressed_device_product_name(void) {
-    std::lock_guard<std::mutex> guard(hids_mutex_);
-
-    for (const auto& it : hids_) {
-      if ((it.second)->get_pressed_keys_count() > 0) {
-        if (auto product = (it.second)->get_product()) {
-          return *product;
-        } else {
-          return std::string("(no product name)");
-        }
-      }
+  bool is_grabbable_callback(human_interface_device& device) {
+    if (!event_manipulator_.is_ready()) {
+      is_grabbable_callback_log_reducer_.warn("event_manipulator_ is not ready. Please wait for a while.");
+      return false;
     }
-
-    return boost::none;
+    return true;
   }
 
   size_t get_all_devices_pressed_keys_count(void) {
@@ -352,9 +429,62 @@ private:
     return total;
   }
 
-  void cancel_grab_timer(void) {
-    std::lock_guard<std::mutex> guard(grab_timer_mutex_);
+  bool is_keyboard_connected(void) {
+    std::lock_guard<std::mutex> guard(hids_mutex_);
 
+    for (const auto& it : hids_) {
+      if ((it.second)->is_keyboard()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool is_pointing_device_connected(void) {
+    std::lock_guard<std::mutex> guard(hids_mutex_);
+
+    for (const auto& it : hids_) {
+      if ((it.second)->is_pointing_device()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void output_devices_json(void) {
+    std::lock_guard<std::mutex> guard(hids_mutex_);
+
+    nlohmann::json json;
+    json = nlohmann::json::array();
+
+    for (const auto& it : hids_) {
+      nlohmann::json j({});
+      if (auto vendor_id = (it.second)->get_vendor_id()) {
+        j["vendor_id"] = *vendor_id;
+      }
+      if (auto product_id = (it.second)->get_product_id()) {
+        j["product_id"] = *product_id;
+      }
+      if (auto manufacturer = (it.second)->get_manufacturer()) {
+        j["manipulator"] = *manufacturer;
+      }
+      if (auto product = (it.second)->get_product()) {
+        j["product"] = *product;
+      }
+
+      if (!j.empty()) {
+        json.push_back(j);
+      }
+    }
+
+    std::ofstream stream(constants::get_devices_json_file_path());
+    if (stream) {
+      stream << std::setw(4) << json << std::endl;
+      chmod(constants::get_devices_json_file_path(), 0644);
+    }
+  }
+
+  void cancel_grab_timer(void) {
     if (grab_timer_) {
       dispatch_source_cancel(grab_timer_);
       dispatch_release(grab_timer_);
@@ -364,13 +494,19 @@ private:
 
   manipulator::event_manipulator& event_manipulator_;
   IOHIDManagerRef _Nullable manager_;
+  std::unique_ptr<iopm_client> iopm_client_;
 
   std::unordered_map<IOHIDDeviceRef, std::unique_ptr<human_interface_device>> hids_;
   std::mutex hids_mutex_;
 
-  dispatch_queue_t _Nonnull queue_;
+  gcd_utility::scoped_queue queue_;
   dispatch_source_t _Nullable grab_timer_;
-  std::mutex grab_timer_mutex_;
-
+  std::mutex grab_mutex_;
+  std::atomic<mode> mode_;
   std::atomic<bool> grabbed_;
+
+  spdlog_utility::log_reducer is_grabbable_callback_log_reducer_;
+
+  std::mutex suspend_mutex_;
+  bool suspended_;
 };

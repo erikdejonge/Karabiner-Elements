@@ -2,6 +2,7 @@
 
 #include "types.hpp"
 #include <CoreGraphics/CoreGraphics.h>
+#include <thread>
 #include <vector>
 
 namespace manipulator {
@@ -81,7 +82,7 @@ public:
     return false;
   }
 
-  bool pressed(const std::vector<krbn::modifier_flag>& modifier_flags) {
+  bool pressed(const std::vector<krbn::modifier_flag>& modifier_flags) const {
     // return true if all modifier flags are pressed.
     for (const auto& m : modifier_flags) {
       if (!pressed(m)) {
@@ -122,60 +123,42 @@ public:
     return bits;
   }
 
-  IOOptionBits get_io_option_bits(void) const {
-    IOOptionBits bits = 0;
+  IOOptionBits get_io_option_bits(krbn::key_code key_code) const {
+    // OS X requires to set NX_NONCOALSESCEDMASK.
+    IOOptionBits bits = NX_NONCOALSESCEDMASK;
+
     if (pressed(krbn::modifier_flag::caps_lock)) {
       bits |= NX_ALPHASHIFTMASK;
     }
-    if (pressed(krbn::modifier_flag::left_control) ||
-        pressed(krbn::modifier_flag::right_control)) {
-      bits |= NX_CONTROLMASK;
+    if (pressed(krbn::modifier_flag::left_control)) {
+      bits |= NX_CONTROLMASK | NX_DEVICELCTLKEYMASK;
     }
-    if (pressed(krbn::modifier_flag::left_shift) ||
-        pressed(krbn::modifier_flag::right_shift)) {
-      bits |= NX_SHIFTMASK;
+    if (pressed(krbn::modifier_flag::right_control)) {
+      bits |= NX_CONTROLMASK | NX_DEVICERCTLKEYMASK;
     }
-    if (pressed(krbn::modifier_flag::left_option) ||
-        pressed(krbn::modifier_flag::right_option)) {
-      bits |= NX_ALTERNATEMASK;
+    if (pressed(krbn::modifier_flag::left_shift)) {
+      bits |= NX_SHIFTMASK | NX_DEVICELSHIFTKEYMASK;
     }
-    if (pressed(krbn::modifier_flag::left_command) ||
-        pressed(krbn::modifier_flag::right_command)) {
-      bits |= NX_COMMANDMASK;
+    if (pressed(krbn::modifier_flag::right_shift)) {
+      bits |= NX_SHIFTMASK | NX_DEVICERSHIFTKEYMASK;
+    }
+    if (pressed(krbn::modifier_flag::left_option)) {
+      bits |= NX_ALTERNATEMASK | NX_DEVICELALTKEYMASK;
+    }
+    if (pressed(krbn::modifier_flag::right_option)) {
+      bits |= NX_ALTERNATEMASK | NX_DEVICERALTKEYMASK;
+    }
+    if (pressed(krbn::modifier_flag::left_command)) {
+      bits |= NX_COMMANDMASK | NX_DEVICELCMDKEYMASK;
+    }
+    if (pressed(krbn::modifier_flag::right_command)) {
+      bits |= NX_COMMANDMASK | NX_DEVICERCMDKEYMASK;
     }
     if (pressed(krbn::modifier_flag::fn)) {
       bits |= NX_SECONDARYFNMASK;
     }
-    return bits;
-  }
 
-  CGEventFlags get_cg_event_flags(CGEventFlags original_flags, krbn::key_code key_code) const {
-    original_flags = CGEventFlags(original_flags & ~(kCGEventFlagMaskAlphaShift | kCGEventFlagMaskControl | kCGEventFlagMaskShift | kCGEventFlagMaskAlternate | kCGEventFlagMaskCommand | kCGEventFlagMaskNumericPad | kCGEventFlagMaskSecondaryFn));
-
-    if (pressed(krbn::modifier_flag::caps_lock)) {
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskAlphaShift);
-    }
-    if (pressed(krbn::modifier_flag::left_control) ||
-        pressed(krbn::modifier_flag::right_control)) {
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskControl);
-    }
-    if (pressed(krbn::modifier_flag::left_shift) ||
-        pressed(krbn::modifier_flag::right_shift)) {
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskShift);
-    }
-    if (pressed(krbn::modifier_flag::left_option) ||
-        pressed(krbn::modifier_flag::right_option)) {
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskAlternate);
-    }
-    if (pressed(krbn::modifier_flag::left_command) ||
-        pressed(krbn::modifier_flag::right_command)) {
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskCommand);
-    }
-    if (pressed(krbn::modifier_flag::fn)) {
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskSecondaryFn);
-    }
-
-    // Add kCGEventFlagMaskNumericPad, kCGEventFlagMaskSecondaryFn by key_code.
+    // Add NX_NUMERICPADMASK, NX_SECONDARYFNMASK by key_code.
     //
     // Note:
     //   Microsoft Remote Client will fail to treat shift-arrow keys unless these flags.
@@ -200,14 +183,14 @@ public:
     case krbn::key_code::keypad_period:
     case krbn::key_code::keypad_equal_sign:
     case krbn::key_code::keypad_comma:
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskNumericPad);
+      bits |= NX_NUMERICPADMASK;
       break;
 
     case krbn::key_code::right_arrow:
     case krbn::key_code::left_arrow:
     case krbn::key_code::down_arrow:
     case krbn::key_code::up_arrow:
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskNumericPad | kCGEventFlagMaskSecondaryFn);
+      bits |= NX_NUMERICPADMASK | NX_SECONDARYFNMASK;
       break;
 
     case krbn::key_code::f1:
@@ -234,14 +217,19 @@ public:
     case krbn::key_code::f22:
     case krbn::key_code::f23:
     case krbn::key_code::f24:
-      original_flags = CGEventFlags(original_flags | kCGEventFlagMaskSecondaryFn);
+      bits |= NX_SECONDARYFNMASK;
       break;
 
     default:
       break;
     }
 
-    return original_flags;
+    return bits;
+  }
+
+  CGEventFlags get_cg_event_flags_for_mouse_events(void) const {
+    // The CGEventFlags and IOOptionBits are same for now.
+    return get_io_option_bits(krbn::key_code::vk_none);
   }
 
 private:
@@ -255,29 +243,45 @@ private:
     const std::string& get_name(void) const { return name_; }
     const std::string& get_symbol(void) const { return symbol_; }
 
-    bool pressed(void) const { return (count_ + lock_count_) > 0; }
+    bool pressed(void) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
+      return (count_ + lock_count_) > 0;
+    }
 
     void reset(void) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
       count_ = 0;
     }
 
     void increase(void) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
       ++count_;
     }
 
     void decrease(void) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
       --count_;
     }
 
     void lock(void) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
       lock_count_ = 1;
     }
 
     void unlock(void) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
       lock_count_ = 0;
     }
 
     void toggle_lock(void) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
       lock_count_ = lock_count_ == 0 ? 1 : 0;
     }
 
@@ -286,6 +290,8 @@ private:
     std::string symbol_;
     int count_;
     int lock_count_;
+
+    std::mutex mutex_;
   };
 
   std::vector<std::unique_ptr<state>> states_;

@@ -1,5 +1,9 @@
 #pragma once
 
+#include "boost_defs.hpp"
+
+#include <array>
+#include <boost/optional.hpp>
 #include <string>
 #include <sys/stat.h>
 
@@ -8,6 +12,14 @@ public:
   static bool exists(const std::string& path) {
     struct stat s;
     return (stat(path.c_str(), &s) == 0);
+  }
+
+  static boost::optional<off_t> file_size(const std::string& path) {
+    struct stat s;
+    if (stat(path.c_str(), &s) != 0) {
+      return boost::none;
+    }
+    return s.st_size;
   }
 
   static bool is_directory(const std::string& path) {
@@ -80,6 +92,14 @@ public:
     }
 
     path.resize(dest);
+  }
+
+  static boost::optional<std::string> realpath(const std::string& path) {
+    std::array<char, PATH_MAX> resolved_path;
+    if (!::realpath(path.c_str(), &(resolved_path[0]))) {
+      return boost::none;
+    }
+    return std::string(&(resolved_path[0]));
   }
 
 private:

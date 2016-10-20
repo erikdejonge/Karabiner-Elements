@@ -3,7 +3,9 @@
 #include "boost_defs.hpp"
 
 #include "apple_hid_usage_tables.hpp"
+#include "gcd_utility.hpp"
 #include "iokit_utility.hpp"
+#include "spdlog_utility.hpp"
 #include "types.hpp"
 #include <IOKit/hid/IOHIDDevice.h>
 #include <IOKit/hid/IOHIDElement.h>
@@ -36,13 +38,16 @@ public:
                              CFIndex report_length)>
       report_callback;
 
+  typedef std::function<bool(human_interface_device& device)> is_grabbable_callback;
+
   human_interface_device(const human_interface_device&) = delete;
 
   human_interface_device(spdlog::logger& logger,
                          IOHIDDeviceRef _Nonnull device) : logger_(logger),
                                                            device_(device),
                                                            registry_entry_id_(0),
-                                                           queue_(nullptr) {
+                                                           queue_(nullptr),
+                                                           is_grabbable_log_reducer_(logger) {
     // ----------------------------------------
     // retain device_
 
@@ -90,32 +95,35 @@ public:
   }
 
   ~human_interface_device(void) {
-    // Unregister all callbacks.
-    unschedule();
-    unregister_report_callback();
-    unregister_value_callback();
-    close();
+    // Release device_ and queue_ in main thread to avoid callback invocations after object has been destroyed.
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      // Unregister all callbacks.
+      unschedule();
+      unregister_report_callback();
+      unregister_value_callback();
+      close();
 
-    // ----------------------------------------
-    // release queue_
+      // ----------------------------------------
+      // release queue_
 
-    if (queue_) {
-      CFRelease(queue_);
-      queue_ = nullptr;
-    }
+      if (queue_) {
+        CFRelease(queue_);
+        queue_ = nullptr;
+      }
 
-    // ----------------------------------------
-    // release elements_
+      // ----------------------------------------
+      // release elements_
 
-    for (const auto& it : elements_) {
-      CFRelease(it.second);
-    }
-    elements_.clear();
+      for (const auto& it : elements_) {
+        CFRelease(it.second);
+      }
+      elements_.clear();
 
-    // ----------------------------------------
-    // release device_
+      // ----------------------------------------
+      // release device_
 
-    CFRelease(device_);
+      CFRelease(device_);
+    });
   }
 
   uint64_t get_registry_entry_id(void) const { return registry_entry_id_; }
@@ -240,6 +248,27 @@ public:
     return iokit_utility::get_transport(device_);
   }
 
+  std::string get_name_for_log(void) const {
+    if (auto product_name = get_product()) {
+      return *product_name;
+    }
+    if (auto vendor_id = get_vendor_id()) {
+      if (auto product_id = get_product_id()) {
+        std::stringstream stream;
+        stream << std::hex
+               << "(vendor_id:0x" << *vendor_id
+               << ", product_id:0x" << *product_id
+               << ")"
+               << std::dec;
+        return stream.str();
+      }
+    }
+
+    std::stringstream stream;
+    stream << "(registry_entry_id:" << registry_entry_id_ << ")";
+    return stream.str();
+  }
+
   IOHIDElementRef _Nullable get_element(uint32_t usage_page, uint32_t usage) const {
     auto key = elements_key(usage_page, usage);
     auto it = elements_.find(key);
@@ -256,6 +285,36 @@ public:
 
   void clear_pressed_keys(void) {
     pressed_key_usages_.clear();
+  }
+
+  void set_is_grabbable_callback(const is_grabbable_callback& callback) {
+    is_grabbable_callback_ = callback;
+  }
+
+  bool is_grabbable(void) {
+    if (repeating_key_) {
+      // We should not grab the device while a key is repeating since we cannot stop the key repeating.
+      // (To stop the key repeating, we have to send a hid report to the device. But we cannot do it.)
+
+      is_grabbable_log_reducer_.warn(std::string("We cannot grab ") + get_name_for_log() + " while a key is repeating.");
+      return false;
+    }
+
+    if (!pressed_buttons_.empty()) {
+      // We should not grab the device while a button is pressed since we cannot release the button.
+      // (To release the button, we have to send a hid report to the device. But we cannot do it.)
+
+      is_grabbable_log_reducer_.warn(std::string("We cannot grab ") + get_name_for_log() + " while mouse buttons are pressed.");
+      return false;
+    }
+
+    if (is_grabbable_callback_) {
+      if (!is_grabbable_callback_(*this)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
 #pragma mark - usage specific utilities
@@ -305,6 +364,15 @@ public:
     return kIOReturnError;
   }
 
+  bool is_keyboard(void) {
+    return IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Keyboard);
+  }
+
+  bool is_pointing_device(void) {
+    return IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Pointer) ||
+           IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Mouse);
+  }
+
 private:
   static void static_queue_value_available_callback(void* _Nullable context, IOReturn result, void* _Nullable sender) {
     if (result != kIOReturnSuccess) {
@@ -337,9 +405,37 @@ private:
         auto usage = IOHIDElementGetUsage(element);
         auto integer_value = IOHIDValueGetIntegerValue(value);
 
+        // Update repeating_key_
+        if (auto key_code = krbn::types::get_key_code(usage_page, usage)) {
+          bool pressed = integer_value;
+          if (pressed) {
+            if (krbn::types::get_modifier_flag(*key_code) != krbn::modifier_flag::zero) {
+              // The pressed key is a modifier key.
+              repeating_key_ = boost::none;
+            } else {
+              repeating_key_ = *key_code;
+            }
+          } else {
+            if (repeating_key_ && *repeating_key_ == *key_code) {
+              repeating_key_ = boost::none;
+            }
+          }
+        }
+
+        // Update pressed_buttons_
+        if (auto pointing_button = krbn::types::get_pointing_button(usage_page, usage)) {
+          bool pressed = integer_value;
+          if (pressed) {
+            pressed_buttons_.push_back(*pointing_button);
+          } else {
+            pressed_buttons_.remove(*pointing_button);
+          }
+        }
+
         // Update pressed_key_usages_.
         if ((usage_page == kHIDPage_KeyboardOrKeypad) ||
-            (usage_page == kHIDPage_AppleVendorTopCase && usage == kHIDUsage_AV_TopCase_KeyboardFn)) {
+            (usage_page == kHIDPage_AppleVendorTopCase && usage == kHIDUsage_AV_TopCase_KeyboardFn) ||
+            (usage_page == kHIDPage_Button)) {
           bool pressed = integer_value;
           uint64_t u = (static_cast<uint64_t>(usage_page) << 32) | usage;
           if (pressed) {
@@ -388,7 +484,7 @@ private:
   }
 
   uint64_t elements_key(uint32_t usage_page, uint32_t usage) const {
-    return (static_cast<uint64_t>(usage_page) << 32 | usage);
+    return ((static_cast<uint64_t>(usage_page) << 32) | usage);
   }
 
   void resize_report_buffer(void) {
@@ -407,8 +503,13 @@ private:
   IOHIDQueueRef _Nullable queue_;
   std::unordered_map<uint64_t, IOHIDElementRef> elements_;
 
+  boost::optional<krbn::key_code> repeating_key_;
+  std::list<krbn::pointing_button> pressed_buttons_;
   std::list<uint64_t> pressed_key_usages_;
   value_callback value_callback_;
   report_callback report_callback_;
   std::vector<uint8_t> report_buffer_;
+
+  is_grabbable_callback is_grabbable_callback_;
+  spdlog_utility::log_reducer is_grabbable_log_reducer_;
 };
