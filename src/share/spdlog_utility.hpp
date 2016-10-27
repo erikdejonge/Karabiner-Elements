@@ -5,11 +5,16 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/optional.hpp>
 #include <iomanip>
+#include <spdlog/spdlog.h>
 
 class spdlog_utility final {
 public:
+  static std::string get_pattern(void) {
+    return "[%Y-%m-%d %H:%M:%S.%e] [%l] [%n] %v";
+  }
+
   static boost::optional<uint64_t> get_sort_key(const std::string& line) {
-    // line == "[2016-09-22 20:18:37.649] [grabber] [info] version 0.90.36"
+    // line == "[2016-09-22 20:18:37.649] [info] [grabber] version 0.90.36"
     // return 20160922201837649
 
     // We can parse time strictly by using boost::posix_time::time_from_string.
@@ -78,4 +83,40 @@ public:
     }
     return boost::none;
   }
+
+  class log_reducer final {
+  public:
+    log_reducer(const log_reducer&) = delete;
+
+    log_reducer(spdlog::logger& logger) : logger_(logger), time_(0) {}
+
+    void info(const std::string& message) {
+      auto t = time(nullptr);
+      if (time_ != t) {
+        time_ = t;
+        logger_.info(message);
+      }
+    }
+
+    void warn(const std::string& message) {
+      auto t = time(nullptr);
+      if (time_ != t) {
+        time_ = t;
+        logger_.warn(message);
+      }
+    }
+
+    void error(const std::string& message) {
+      auto t = time(nullptr);
+      if (time_ != t) {
+        time_ = t;
+        logger_.error(message);
+      }
+    }
+
+  private:
+    spdlog::logger& logger_;
+
+    time_t time_;
+  };
 };

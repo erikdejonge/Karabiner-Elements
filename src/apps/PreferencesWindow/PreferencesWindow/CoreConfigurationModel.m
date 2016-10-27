@@ -1,13 +1,23 @@
-#import "ConfigurationCoreModel.h"
+#import "CoreConfigurationModel.h"
 
-@interface ConfigurationCoreModel ()
+@interface DeviceConfiguration ()
 
-@property(copy, readwrite) NSArray<NSDictionary*>* simpleModifications;
-@property(copy, readwrite) NSArray<NSDictionary*>* fnFunctionKeys;
+@property(readwrite) DeviceIdentifiers* deviceIdentifiers;
 
 @end
 
-@implementation ConfigurationCoreModel
+@implementation DeviceConfiguration
+@end
+
+@interface CoreConfigurationModel ()
+
+@property(copy, readwrite) NSArray<NSDictionary*>* simpleModifications;
+@property(copy, readwrite) NSArray<NSDictionary*>* fnFunctionKeys;
+@property(copy, readwrite) NSArray<DeviceConfiguration*>* devices;
+
+@end
+
+@implementation CoreConfigurationModel
 
 - (instancetype)initWithProfile:(NSDictionary*)profile {
   self = [super init];
@@ -15,6 +25,33 @@
   if (self) {
     _simpleModifications = [self simpleModificationsDictionaryToArray:profile[@"simple_modifications"]];
     _fnFunctionKeys = [self simpleModificationsDictionaryToArray:profile[@"fn_function_keys"]];
+
+    // _devices
+    NSMutableArray<DeviceConfiguration*>* devices = [NSMutableArray new];
+    if (profile[@"devices"]) {
+      for (NSDictionary* device in profile[@"devices"]) {
+        NSDictionary* identifiers = device[@"identifiers"];
+        if (!identifiers) {
+          continue;
+        }
+        DeviceIdentifiers* deviceIdentifiers = [[DeviceIdentifiers alloc] initWithDictionary:identifiers];
+
+        BOOL found = NO;
+        for (DeviceConfiguration* d in devices) {
+          if ([d.deviceIdentifiers isEqualToDeviceIdentifiers:deviceIdentifiers]) {
+            found = YES;
+          }
+        }
+
+        if (!found) {
+          DeviceConfiguration* deviceConfiguration = [DeviceConfiguration new];
+          deviceConfiguration.deviceIdentifiers = deviceIdentifiers;
+          deviceConfiguration.ignore = [device[@"ignore"] boolValue];
+          [devices addObject:deviceConfiguration];
+        }
+      }
+    }
+    _devices = devices;
   }
 
   return self;
@@ -23,11 +60,13 @@
 - (NSArray*)simpleModificationsDictionaryToArray:(NSDictionary*)dictionary {
   NSMutableArray<NSDictionary*>* array = [NSMutableArray new];
 
-  for (NSString* key in [[dictionary allKeys] sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
-    [array addObject:@{
-      @"from" : key,
-      @"to" : dictionary[key],
-    }];
+  if (dictionary) {
+    for (NSString* key in [[dictionary allKeys] sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
+      [array addObject:@{
+        @"from" : key,
+        @"to" : dictionary[key],
+      }];
+    }
   }
 
   return array;
@@ -75,6 +114,28 @@
   self.fnFunctionKeys = fnFunctionKeys;
 }
 
+- (void)setDeviceIgnore:(BOOL)ignore deviceIdentifiers:(DeviceIdentifiers*)deviceIdentifiers {
+  NSMutableArray* devices = [NSMutableArray arrayWithArray:self.devices];
+  BOOL __block found = NO;
+  [devices enumerateObjectsUsingBlock:^(DeviceConfiguration* obj, NSUInteger index, BOOL* stop) {
+    if ([obj.deviceIdentifiers isEqualToDeviceIdentifiers:deviceIdentifiers]) {
+      obj.ignore = ignore;
+
+      found = YES;
+      *stop = YES;
+    }
+  }];
+
+  if (!found) {
+    DeviceConfiguration* deviceConfiguration = [DeviceConfiguration new];
+    deviceConfiguration.deviceIdentifiers = deviceIdentifiers;
+    deviceConfiguration.ignore = ignore;
+    [devices addObject:deviceConfiguration];
+  }
+
+  self.devices = devices;
+}
+
 - (NSDictionary*)simpleModificationsArrayToDictionary:(NSArray*)array {
   NSMutableDictionary* dictionary = [NSMutableDictionary new];
   for (NSDictionary* d in array) {
@@ -97,15 +158,15 @@
   return [self simpleModificationsArrayToDictionary:self.fnFunctionKeys];
 }
 
-#pragma mark - NSCoping
-
-- (id)copyWithZone:(NSZone*)zone {
-  ConfigurationCoreModel* obj = [[[self class] allocWithZone:zone] init];
-  if (obj) {
-    obj.simpleModifications = [self.simpleModifications copyWithZone:zone];
-    obj.fnFunctionKeys = [self.fnFunctionKeys copyWithZone:zone];
+- (NSArray*)devicesArray {
+  NSMutableArray* array = [NSMutableArray new];
+  for (DeviceConfiguration* d in self.devices) {
+    [array addObject:@{
+      @"identifiers" : [d.deviceIdentifiers toDictionary],
+      @"ignore" : @(d.ignore),
+    }];
   }
-  return obj;
+  return array;
 }
 
 @end

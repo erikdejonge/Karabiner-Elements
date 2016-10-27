@@ -2,6 +2,7 @@
 
 #include "file_monitor.hpp"
 #include "filesystem.hpp"
+#include "gcd_utility.hpp"
 #include "spdlog_utility.hpp"
 #include <fstream>
 #include <spdlog/spdlog.h>
@@ -22,8 +23,7 @@ public:
   log_monitor(spdlog::logger& logger,
               const std::vector<std::string>& targets,
               const new_log_line_callback& callback) : logger_(logger),
-                                                       callback_(callback),
-                                                       queue_(dispatch_queue_create(nullptr, nullptr)) {
+                                                       callback_(callback) {
     // setup initial_lines_
 
     for (const auto& target : targets) {
@@ -35,35 +35,27 @@ public:
   }
 
   ~log_monitor(void) {
-    if (timer_) {
-      dispatch_source_cancel(timer_);
-      dispatch_release(timer_);
-      timer_ = 0;
-    }
-
-    dispatch_release(queue_);
+    timer_ = nullptr;
   }
 
   void start(void) {
-    timer_ = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue_);
-    if (!timer_) {
-      logger_.error("failed to dispatch_source_create @ {0}", __PRETTY_FUNCTION__);
-    } else {
-      dispatch_source_set_timer(timer_, dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC), 1.0 * NSEC_PER_SEC, 0);
-      dispatch_source_set_event_handler(timer_, ^{
-        for (const auto& file : files_) {
-          if (auto size = filesystem::file_size(file)) {
-            auto it = read_position_.find(file);
-            if (it != read_position_.end()) {
-              if (it->second != *size) {
-                call_callback(file);
+    timer_ = std::make_unique<gcd_utility::main_queue_timer>(
+        0,
+        dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC),
+        1.0 * NSEC_PER_SEC,
+        0,
+        ^{
+          for (const auto& file : files_) {
+            if (auto size = filesystem::file_size(file)) {
+              auto it = read_position_.find(file);
+              if (it != read_position_.end()) {
+                if (it->second != *size) {
+                  call_callback(file);
+                }
               }
             }
           }
-        }
-      });
-      dispatch_resume(timer_);
-    }
+        });
   }
 
   const std::vector<std::pair<uint64_t, std::string>>& get_initial_lines(void) const {
@@ -156,8 +148,7 @@ private:
   spdlog::logger& logger_;
   new_log_line_callback callback_;
 
-  dispatch_queue_t queue_;
-  dispatch_source_t timer_;
+  std::unique_ptr<gcd_utility::main_queue_timer> timer_;
 
   std::vector<std::pair<uint64_t, std::string>> initial_lines_;
   std::unordered_map<std::string, std::streampos> read_position_;

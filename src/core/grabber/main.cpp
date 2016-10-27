@@ -3,6 +3,7 @@
 #include "event_manipulator.hpp"
 #include "karabiner_version.h"
 #include "notification_center.hpp"
+#include "thread_utility.hpp"
 #include <iostream>
 #include <unistd.h>
 
@@ -15,16 +16,17 @@ int main(int argc, const char* argv[]) {
   // ----------------------------------------
   signal(SIGUSR1, SIG_IGN);
   signal(SIGUSR2, SIG_IGN);
+  thread_utility::register_main_thread();
 
   logger::get_logger().info("version {0}", karabiner_version);
 
   // load kexts
-  system("/sbin/kextload /Library/Extensions/org.pqrs.driver.VirtualHIDManager.kext");
+  system("/sbin/kextload '/Library/Application Support/org.pqrs/Karabiner-Elements/org.pqrs.driver.VirtualHIDManager.kext'");
 
   // make socket directory.
-  mkdir(constants::get_socket_directory(), 0755);
-  chown(constants::get_socket_directory(), 0, 0);
-  chmod(constants::get_socket_directory(), 0755);
+  mkdir(constants::get_tmp_directory(), 0755);
+  chown(constants::get_tmp_directory(), 0, 0);
+  chmod(constants::get_tmp_directory(), 0755);
 
   unlink(constants::get_grabber_socket_file_path());
   unlink(constants::get_event_dispatcher_socket_file_path());

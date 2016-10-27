@@ -4,6 +4,7 @@
 
 #include "event_dispatcher_manager.hpp"
 #include "event_tap_manager.hpp"
+#include "gcd_utility.hpp"
 #include "logger.hpp"
 #include "manipulator.hpp"
 #include "modifier_flag_manager.hpp"
@@ -23,26 +24,19 @@ public:
   event_manipulator(const event_manipulator&) = delete;
 
   event_manipulator(void) : event_dispatcher_manager_(),
-                            event_source_(CGEventSourceCreate(kCGEventSourceStateHIDSystemState)),
                             key_repeat_manager_(*this) {
   }
 
   ~event_manipulator(void) {
     event_tap_manager_ = nullptr;
-
-    if (event_source_) {
-      CFRelease(event_source_);
-      event_source_ = nullptr;
-    }
   }
 
   bool is_ready(void) {
-    return event_dispatcher_manager_.is_connected() &&
-           event_source_ != nullptr;
+    return event_dispatcher_manager_.is_connected();
   }
 
   void grab_mouse_events(void) {
-    event_tap_manager_ = std::make_unique<event_tap_manager>(modifier_flag_manager_);
+    event_tap_manager_ = std::make_unique<event_tap_manager>();
   }
 
   void ungrab_mouse_events(void) {
@@ -412,24 +406,11 @@ private:
     key_repeat_manager(const key_repeat_manager&) = delete;
 
     key_repeat_manager(event_manipulator& event_manipulator) : event_manipulator_(event_manipulator),
-                                                               queue_(dispatch_queue_create(nullptr, nullptr)),
-                                                               timer_(0) {
+                                                               timer_(nullptr) {
     }
 
     ~key_repeat_manager(void) {
       stop();
-
-      dispatch_release(queue_);
-    }
-
-    void stop(void) {
-      std::lock_guard<std::mutex> guard(mutex_);
-
-      if (timer_) {
-        dispatch_source_cancel(timer_);
-        dispatch_release(timer_);
-        timer_ = 0;
-      }
     }
 
     void start(krbn::key_code from_key_code, krbn::key_code to_key_code, bool pressed,
@@ -450,31 +431,29 @@ private:
           return;
         }
 
-        timer_ = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, DISPATCH_TIMER_STRICT, queue_);
-        if (timer_) {
-          std::lock_guard<std::mutex> guard(mutex_);
+        timer_ = std::make_unique<gcd_utility::main_queue_timer>(
+            DISPATCH_TIMER_STRICT,
+            dispatch_time(DISPATCH_TIME_NOW, initial_key_repeat_milliseconds * NSEC_PER_MSEC),
+            key_repeat_milliseconds * NSEC_PER_MSEC,
+            0,
+            ^{
+              event_manipulator_.post_key(from_key_code, to_key_code, pressed, true);
+            });
 
-          dispatch_source_set_timer(timer_,
-                                    dispatch_time(DISPATCH_TIME_NOW, initial_key_repeat_milliseconds * NSEC_PER_MSEC),
-                                    key_repeat_milliseconds * NSEC_PER_MSEC,
-                                    0);
-          dispatch_source_set_event_handler(timer_, ^{
-            event_manipulator_.post_key(from_key_code, to_key_code, pressed, true);
-          });
-          dispatch_resume(timer_);
-          from_key_code_ = from_key_code;
-        }
+        from_key_code_ = from_key_code;
       }
+    }
+
+    void stop(void) {
+      timer_ = nullptr;
     }
 
   private:
     event_manipulator& event_manipulator_;
 
-    dispatch_queue_t queue_;
-    dispatch_source_t timer_;
+    std::unique_ptr<gcd_utility::main_queue_timer> timer_;
 
     boost::optional<krbn::key_code> from_key_code_;
-    std::mutex mutex_;
   };
 
   bool post_modifier_flag_event(krbn::key_code key_code, bool pressed) {
@@ -484,11 +463,8 @@ private:
     if (modifier_flag != krbn::modifier_flag::zero) {
       modifier_flag_manager_.manipulate(modifier_flag, operation);
 
-      // We have to post modifier key event via CGEventPost for some apps (Microsoft Remote Desktop)
-      if (event_source_) {
-        auto flags = modifier_flag_manager_.get_io_option_bits(key_code);
-        event_dispatcher_manager_.post_modifier_flags(key_code, flags);
-      }
+      auto flags = modifier_flag_manager_.get_io_option_bits(key_code);
+      event_dispatcher_manager_.post_modifier_flags(key_code, flags);
 
       return true;
     }
@@ -506,21 +482,18 @@ private:
   }
 
   void post_key(krbn::key_code from_key_code, krbn::key_code to_key_code, bool pressed, bool repeat) {
-    if (event_source_) {
-      auto hid_system_key = krbn::types::get_hid_system_key(to_key_code);
-      auto hid_system_aux_control_button = krbn::types::get_hid_system_aux_control_button(to_key_code);
-      if (hid_system_key || hid_system_aux_control_button) {
-        auto event_type = pressed ? krbn::event_type::key_down : krbn::event_type::key_up;
-        auto flags = modifier_flag_manager_.get_io_option_bits(to_key_code);
-        event_dispatcher_manager_.post_key(to_key_code, event_type, flags, repeat);
-      }
+    auto hid_system_key = krbn::types::get_hid_system_key(to_key_code);
+    auto hid_system_aux_control_button = krbn::types::get_hid_system_aux_control_button(to_key_code);
+    if (hid_system_key || hid_system_aux_control_button) {
+      auto event_type = pressed ? krbn::event_type::key_down : krbn::event_type::key_up;
+      auto flags = modifier_flag_manager_.get_io_option_bits(to_key_code);
+      event_dispatcher_manager_.post_key(to_key_code, event_type, flags, repeat);
     }
   }
 
   event_dispatcher_manager event_dispatcher_manager_;
   modifier_flag_manager modifier_flag_manager_;
   pointing_button_manager pointing_button_manager_;
-  CGEventSourceRef event_source_;
   key_repeat_manager key_repeat_manager_;
   std::unique_ptr<event_tap_manager> event_tap_manager_;
 

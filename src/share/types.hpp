@@ -2,6 +2,7 @@
 
 #include "boost_defs.hpp"
 
+#include "apple_hid_usage_tables.hpp"
 #include "system_preferences.hpp"
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
@@ -25,6 +26,9 @@ enum class operation_type : uint8_t {
   add_simple_modification,
   clear_fn_function_keys,
   add_fn_function_key,
+  clear_devices,
+  add_device,
+  complete_devices,
   // event_dispatcher -> grabber
   set_caps_lock_led_state,
   // grabber -> event_dispatcher
@@ -197,6 +201,28 @@ enum class modifier_flag : uint32_t {
 enum class led_state : uint32_t {
   on,
   off,
+};
+
+enum class vendor_id : uint32_t {
+};
+
+enum class product_id : uint32_t {
+};
+
+enum class location_id : uint32_t {
+};
+
+struct device_identifiers_struct {
+  vendor_id vendor_id;
+  product_id product_id;
+  bool is_keyboard;
+  bool is_pointing_device;
+};
+
+enum class keyboard_type {
+  ansi = 40,
+  iso = 41,
+  jis = 42,
 };
 
 class types final {
@@ -449,6 +475,23 @@ public:
     return it->second;
   }
 
+  static boost::optional<key_code> get_key_code(uint32_t usage_page, uint32_t usage) {
+    switch (usage_page) {
+    case kHIDPage_KeyboardOrKeypad:
+      if (kHIDUsage_KeyboardErrorUndefined < usage && usage < kHIDUsage_Keyboard_Reserved) {
+        return krbn::key_code(usage);
+      }
+      break;
+
+    case kHIDPage_AppleVendorTopCase:
+      if (usage == kHIDUsage_AV_TopCase_KeyboardFn) {
+        return krbn::key_code::vk_fn_modifier;
+      }
+      break;
+    }
+    return boost::none;
+  }
+
   // hid usage -> CoreGraphics key code
   static const std::unordered_map<key_code, uint8_t>& get_hid_system_key_map(void) {
     static std::unordered_map<key_code, uint8_t> map;
@@ -668,9 +711,9 @@ public:
       map[key_code::vk_consumer_brightness_up] = NX_KEYTYPE_BRIGHTNESS_UP;
       map[key_code::vk_consumer_illumination_down] = NX_KEYTYPE_ILLUMINATION_DOWN;
       map[key_code::vk_consumer_illumination_up] = NX_KEYTYPE_ILLUMINATION_UP;
-      map[key_code::vk_consumer_next] = NX_KEYTYPE_NEXT;
+      map[key_code::vk_consumer_next] = NX_KEYTYPE_FAST;
       map[key_code::vk_consumer_play] = NX_KEYTYPE_PLAY;
-      map[key_code::vk_consumer_previous] = NX_KEYTYPE_PREVIOUS;
+      map[key_code::vk_consumer_previous] = NX_KEYTYPE_REWIND;
     }
     return map;
   }
@@ -682,6 +725,13 @@ public:
       return boost::none;
     }
     return it->second;
+  }
+
+  static boost::optional<pointing_button> get_pointing_button(uint32_t usage_page, uint32_t usage) {
+    if (usage_page == kHIDPage_Button) {
+      return krbn::pointing_button(usage);
+    }
+    return boost::none;
   }
 };
 
@@ -726,6 +776,26 @@ struct operation_type_add_fn_function_key_struct {
   const operation_type operation_type;
   key_code from_key_code;
   key_code to_key_code;
+};
+
+struct operation_type_clear_devices_struct {
+  operation_type_clear_devices_struct(void) : operation_type(operation_type::clear_devices) {}
+
+  const operation_type operation_type;
+};
+
+struct operation_type_add_device_struct {
+  operation_type_add_device_struct(void) : operation_type(operation_type::add_device) {}
+
+  const operation_type operation_type;
+  device_identifiers_struct device_identifiers_struct;
+  bool ignore;
+};
+
+struct operation_type_complete_devices_struct {
+  operation_type_complete_devices_struct(void) : operation_type(operation_type::complete_devices) {}
+
+  const operation_type operation_type;
 };
 
 struct operation_type_set_caps_lock_led_state_struct {

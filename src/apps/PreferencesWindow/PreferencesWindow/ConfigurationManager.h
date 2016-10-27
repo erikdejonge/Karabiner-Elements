@@ -1,11 +1,11 @@
 // -*- Mode: objc -*-
 
 @import Cocoa;
-#import "ConfigurationCoreModel.h"
+#import "CoreConfigurationModel.h"
 
 @interface ConfigurationManager : NSObject
 
-@property(copy, readonly) ConfigurationCoreModel* configurationCoreModel;
+@property(readonly) CoreConfigurationModel* configurationCoreModel;
 
 - (void)setup;
 

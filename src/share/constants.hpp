@@ -11,7 +11,7 @@ public:
     return "/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_event_dispatcher";
   }
 
-  static const char* get_socket_directory(void) {
+  static const char* get_tmp_directory(void) {
     return "/Library/Application Support/org.pqrs/tmp";
   }
 
@@ -21,6 +21,10 @@ public:
 
   static const char* get_event_dispatcher_socket_file_path(void) {
     return "/Library/Application Support/org.pqrs/tmp/karabiner_event_dispatcher_receiver";
+  }
+
+  static const char* get_devices_json_file_path(void) {
+    return "/Library/Application Support/org.pqrs/tmp/devices.json";
   }
 
   static const char* get_home_dot_karabiner_directory(void) {
@@ -67,7 +71,7 @@ public:
     }
   }
 
-  static const char* get_configuration_core_file_path(void) {
+  static const char* get_core_configuration_file_path(void) {
     static std::mutex mutex;
     static bool once = false;
     static std::string file_path;
