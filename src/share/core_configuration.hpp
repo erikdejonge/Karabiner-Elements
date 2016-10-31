@@ -18,19 +18,40 @@
 //                 "escape": "spacebar"
 //             },
 //             "fn_function_keys": {
-//                 "f1":  "vk_consumer_brightness_down",
-//                 "f2":  "vk_consumer_brightness_up",
-//                 "f3":  "vk_mission_control",
-//                 "f4":  "vk_launchpad",
-//                 "f5":  "vk_consumer_illumination_down",
-//                 "f6":  "vk_consumer_illumination_up",
-//                 "f7":  "vk_consumer_previous",
-//                 "f8":  "vk_consumer_play",
-//                 "f9":  "vk_consumer_next",
+//                 "f1": "vk_consumer_brightness_down",
+//                 "f2": "vk_consumer_brightness_up",
+//                 "f3": "vk_mission_control",
+//                 "f4": "vk_launchpad",
+//                 "f5": "vk_consumer_illumination_down",
+//                 "f6": "vk_consumer_illumination_up",
+//                 "f7": "vk_consumer_previous",
+//                 "f8": "vk_consumer_play",
+//                 "f9": "vk_consumer_next",
 //                 "f10": "mute",
 //                 "f11": "volume_down",
 //                 "f12": "volume_up"
-//             }
+//             },
+//             "devices": [
+//                 {
+//                     "identifiers": {
+//                         "vendor_id": 1133,
+//                         "product_id": 50475,
+//                         "is_keyboard": true,
+//                         "is_pointing_device": false
+//                     },
+//                     "ignore": false
+//                 },
+//                 {
+//                     "identifiers": {
+//                         "vendor_id": 1452,
+//                         "product_id": 610,
+//                         "is_keyboard": true,
+//                         "is_pointing_device": false
+//                     },
+//                     "ignore": true,
+//                     "keyboard_type": 45
+//                 }
+//             ]
 //         },
 //         {
 //             "name": "Empty",
@@ -39,11 +60,11 @@
 //     ]
 // }
 
-class configuration_core final {
+class core_configuration final {
 public:
-  configuration_core(const configuration_core&) = delete;
+  core_configuration(const core_configuration&) = delete;
 
-  configuration_core(spdlog::logger& logger, const std::string& file_path) : logger_(logger), file_path_(file_path), loaded_(false) {
+  core_configuration(spdlog::logger& logger, const std::string& file_path) : logger_(logger), file_path_(file_path), loaded_(false) {
     std::ifstream input(file_path_);
     if (input) {
       try {
@@ -55,7 +76,7 @@ public:
     }
   }
 
-  configuration_core(spdlog::logger& logger) : configuration_core(logger, get_file_path()) {
+  core_configuration(spdlog::logger& logger) : core_configuration(logger, get_file_path()) {
   }
 
   static std::string get_file_path(void) {
@@ -79,6 +100,40 @@ public:
   std::vector<std::pair<krbn::key_code, krbn::key_code>> get_current_profile_fn_function_keys(void) {
     auto profile = get_current_profile();
     return get_key_code_pair_from_json_object(profile["fn_function_keys"]);
+  }
+
+  std::vector<std::pair<krbn::device_identifiers_struct, krbn::device_configuration_struct>> get_current_profile_devices(void) {
+    std::vector<std::pair<krbn::device_identifiers_struct, krbn::device_configuration_struct>> v;
+
+    auto profile = get_current_profile();
+    if (profile["devices"].is_array()) {
+      for (auto&& device : profile["devices"]) {
+        if (device["identifiers"].is_object() &&
+            device["identifiers"]["vendor_id"].is_number() &&
+            device["identifiers"]["product_id"].is_number() &&
+            device["identifiers"]["is_keyboard"].is_boolean() &&
+            device["identifiers"]["is_pointing_device"].is_boolean() &&
+            device["ignore"].is_boolean()) {
+          krbn::device_identifiers_struct device_identifiers_struct;
+          device_identifiers_struct.vendor_id = krbn::vendor_id(static_cast<uint32_t>(device["identifiers"]["vendor_id"]));
+          device_identifiers_struct.product_id = krbn::product_id(static_cast<uint32_t>(device["identifiers"]["product_id"]));
+          device_identifiers_struct.is_keyboard = device["identifiers"]["is_keyboard"];
+          device_identifiers_struct.is_pointing_device = device["identifiers"]["is_pointing_device"];
+
+          krbn::device_configuration_struct device_configuration_struct;
+          device_configuration_struct.ignore = device["ignore"];
+          device_configuration_struct.keyboard_type = krbn::keyboard_type::none;
+          // keyboard_type is optional
+          if (device["keyboard_type"].is_number()) {
+            device_configuration_struct.keyboard_type = krbn::keyboard_type(static_cast<uint32_t>(device["keyboard_type"]));
+          }
+
+          v.push_back(std::make_pair(device_identifiers_struct, device_configuration_struct));
+        }
+      }
+    }
+
+    return v;
   }
 
   std::string get_current_profile_json(void) {
@@ -119,6 +174,7 @@ private:
     json["fn_function_keys"]["f10"] = "mute";
     json["fn_function_keys"]["f11"] = "volume_down";
     json["fn_function_keys"]["f12"] = "volume_up";
+    json["devices"] = nlohmann::json::array();
     return json;
   }
 
@@ -142,7 +198,6 @@ private:
   std::vector<std::pair<krbn::key_code, krbn::key_code>> get_key_code_pair_from_json_object(const nlohmann::json& json) {
     std::vector<std::pair<krbn::key_code, krbn::key_code>> v;
 
-    auto profile = get_current_profile();
     if (json.is_object()) {
       for (auto it = json.begin(); it != json.end(); ++it) {
         std::string from = it.key();

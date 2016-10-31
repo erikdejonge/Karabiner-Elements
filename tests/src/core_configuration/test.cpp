@@ -1,7 +1,7 @@
 #define CATCH_CONFIG_MAIN
 #include "../../vendor/catch/catch.hpp"
 
-#include "configuration_core.hpp"
+#include "core_configuration.hpp"
 #include <iostream>
 #include <spdlog/spdlog.h>
 
@@ -10,14 +10,14 @@ public:
   static spdlog::logger& get_logger(void) {
     static std::shared_ptr<spdlog::logger> logger;
     if (!logger) {
-      logger = spdlog::stdout_logger_mt("configuration_core", true);
+      logger = spdlog::stdout_logger_mt("core_configuration", true);
     }
     return *logger;
   }
 };
 
 TEST_CASE("valid") {
-  configuration_core configuration(logger::get_logger(), "json/example.json");
+  core_configuration configuration(logger::get_logger(), "json/example.json");
 
   {
     std::vector<std::pair<krbn::key_code, krbn::key_code>> expected{
@@ -43,12 +43,30 @@ TEST_CASE("valid") {
     };
     REQUIRE(configuration.get_current_profile_fn_function_keys() == expected);
   }
+  {
+    auto actual = configuration.get_current_profile_devices();
+    REQUIRE(actual.size() == 2);
+
+    REQUIRE(actual[0].first.vendor_id == krbn::vendor_id(1133));
+    REQUIRE(actual[0].first.product_id == krbn::product_id(50475));
+    REQUIRE(actual[0].first.is_keyboard == true);
+    REQUIRE(actual[0].first.is_pointing_device == false);
+    REQUIRE(actual[0].second.ignore == false);
+    REQUIRE(actual[0].second.keyboard_type == krbn::keyboard_type::none);
+
+    REQUIRE(actual[1].first.vendor_id == krbn::vendor_id(1452));
+    REQUIRE(actual[1].first.product_id == krbn::product_id(610));
+    REQUIRE(actual[1].first.is_keyboard == true);
+    REQUIRE(actual[1].first.is_pointing_device == false);
+    REQUIRE(actual[1].second.ignore == true);
+    REQUIRE(actual[1].second.keyboard_type == krbn::keyboard_type(40));
+  }
 
   REQUIRE(configuration.is_loaded() == true);
 }
 
 TEST_CASE("broken.json") {
-  configuration_core configuration(logger::get_logger(), "json/broken.json");
+  core_configuration configuration(logger::get_logger(), "json/broken.json");
 
   std::vector<std::pair<krbn::key_code, krbn::key_code>> expected;
   REQUIRE(configuration.get_current_profile_simple_modifications() == expected);
@@ -56,7 +74,7 @@ TEST_CASE("broken.json") {
 }
 
 TEST_CASE("invalid_key_code_name.json") {
-  configuration_core configuration(logger::get_logger(), "json/invalid_key_code_name.json");
+  core_configuration configuration(logger::get_logger(), "json/invalid_key_code_name.json");
 
   std::vector<std::pair<krbn::key_code, krbn::key_code>> expected{
       std::make_pair(krbn::key_code(41), krbn::key_code(44)),

@@ -1,4 +1,5 @@
 #import "JsonUtility.h"
+#include "libkrbn.h"
 
 @implementation JsonUtility
 
@@ -32,18 +33,18 @@
   NSArray* jsonObject = [NSJSONSerialization JSONObjectWithStream:stream
                                                           options:0
                                                             error:&error];
-  [stream close];
-
   if (error) {
     NSLog(@"JSONObjectWithStream error @ [JsonUtility loadFile]: %@", error);
     return nil;
   }
 
+  [stream close];
+
   return jsonObject;
 }
 
 + (void)saveJsonToFile:(id)json filePath:(NSString*)filePath {
-  NSOutputStream* stream = [NSOutputStream outputStreamToFileAtPath:filePath append:NO];
+  NSOutputStream* stream = [NSOutputStream outputStreamToMemory];
   [stream open];
   NSError* error = nil;
   [NSJSONSerialization writeJSONObject:json
@@ -53,6 +54,17 @@
   if (error) {
     NSLog(@"writeJSONObject error @ [JsonUtility saveJsonToFile]: %@", error);
     return;
+  }
+
+  NSData* data = [stream propertyForKey:NSStreamDataWrittenToMemoryStreamKey];
+  [stream close];
+
+  if (data.length > 0) {
+    NSString* string = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    bool result = libkrbn_save_beautified_json_string([filePath UTF8String], [string UTF8String]);
+    if (!result) {
+      NSLog(@"libkrbn_save_beautified_json_string @ [JsonUtility saveJsonToFile]");
+    }
   }
 }
 

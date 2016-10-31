@@ -21,7 +21,7 @@ public:
     const size_t buffer_length = 8 * 1024;
     buffer_.resize(buffer_length);
 
-    mkdir(constants::get_socket_directory(), 0755);
+    mkdir(constants::get_tmp_directory(), 0755);
     const char* path = constants::get_event_dispatcher_socket_file_path();
     unlink(path);
     server_ = std::make_unique<local_datagram_server>(path);
@@ -91,7 +91,7 @@ private:
             logger::get_logger().error("invalid size for krbn::operation_type::post_modifier_flags");
           } else {
             auto p = reinterpret_cast<krbn::operation_type_post_modifier_flags_struct*>(&(buffer_[0]));
-            hid_system_client_.post_modifier_flags(p->key_code, p->flags);
+            hid_system_client_.post_modifier_flags(p->key_code, p->flags, p->keyboard_type);
           }
           break;
 
@@ -100,7 +100,7 @@ private:
             logger::get_logger().error("invalid size for krbn::operation_type::post_key");
           } else {
             auto p = reinterpret_cast<krbn::operation_type_post_key_struct*>(&(buffer_[0]));
-            hid_system_client_.post_key(p->key_code, p->event_type, p->flags, p->repeat);
+            hid_system_client_.post_key(p->key_code, p->event_type, p->flags, p->keyboard_type, p->repeat);
           }
           break;
 

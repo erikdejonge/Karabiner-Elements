@@ -17,37 +17,30 @@ public:
   connection_manager(manipulator::event_manipulator& event_manipulator,
                      device_grabber& device_grabber) : event_manipulator_(event_manipulator),
                                                        device_grabber_(device_grabber),
-                                                       timer_(0),
+                                                       timer_(nullptr),
                                                        last_uid_(0) {
-    timer_ = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue_.get());
-    if (!timer_) {
-      logger::get_logger().error("failed to dispatch_source_create");
-    } else {
-      dispatch_source_set_timer(timer_, dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC), 1.0 * NSEC_PER_SEC, 0);
-      dispatch_source_set_event_handler(timer_, ^{
-        if (auto uid = session::get_current_console_user_id()) {
-          if (last_uid_ != *uid) {
-            last_uid_ = *uid;
-            logger::get_logger().info("current_console_user_id: {0}", *uid);
+    timer_ = std::make_unique<gcd_utility::main_queue_timer>(
+        0,
+        dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC),
+        1.0 * NSEC_PER_SEC,
+        0,
+        ^{
+          if (auto uid = session::get_current_console_user_id()) {
+            if (last_uid_ != *uid) {
+              last_uid_ = *uid;
+              logger::get_logger().info("current_console_user_id: {0}", *uid);
 
-            event_manipulator_.relaunch_event_dispatcher();
+              event_manipulator_.relaunch_event_dispatcher();
 
-            receiver_ = nullptr;
-            receiver_ = std::make_unique<receiver>(event_manipulator_, device_grabber_);
+              receiver_ = nullptr;
+              receiver_ = std::make_unique<receiver>(event_manipulator_, device_grabber_);
+            }
           }
-        }
-      });
-      dispatch_resume(timer_);
-    }
+        });
   }
 
   ~connection_manager(void) {
-    if (timer_) {
-      dispatch_source_cancel(timer_);
-      dispatch_release(timer_);
-      timer_ = 0;
-    }
-
+    timer_ = nullptr;
     receiver_ = nullptr;
   }
 
@@ -55,8 +48,7 @@ private:
   manipulator::event_manipulator& event_manipulator_;
   device_grabber& device_grabber_;
 
-  gcd_utility::scoped_queue queue_;
-  dispatch_source_t timer_;
+  std::unique_ptr<gcd_utility::main_queue_timer> timer_;
 
   uid_t last_uid_;
 

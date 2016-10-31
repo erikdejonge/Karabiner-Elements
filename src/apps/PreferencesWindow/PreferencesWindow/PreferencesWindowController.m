@@ -1,4 +1,5 @@
 #import "PreferencesWindowController.h"
+#import "DevicesTableViewController.h"
 #import "FnFunctionKeysTableViewController.h"
 #import "LogFileTextViewController.h"
 #import "SimpleModificationsMenuManager.h"
@@ -7,9 +8,12 @@
 
 @interface PreferencesWindowController ()
 
+@property(weak) IBOutlet DevicesTableViewController* devicesTableViewController;
 @property(weak) IBOutlet FnFunctionKeysTableViewController* fnFunctionKeysTableViewController;
 @property(weak) IBOutlet LogFileTextViewController* logFileTextViewController;
 @property(weak) IBOutlet NSTableView* simpleModificationsTableView;
+@property(weak) IBOutlet NSTableView* fnFunctionKeysTableView;
+@property(weak) IBOutlet NSTableView* devicesTableView;
 @property(weak) IBOutlet NSTextField* versionLabel;
 @property(weak) IBOutlet SimpleModificationsMenuManager* simpleModificationsMenuManager;
 @property(weak) IBOutlet SimpleModificationsTableViewController* simpleModificationsTableViewController;
@@ -22,10 +26,13 @@
   [self.simpleModificationsMenuManager setup];
   [self.simpleModificationsTableViewController setup];
   [self.fnFunctionKeysTableViewController setup];
+  [self.devicesTableViewController setup];
 
   self.versionLabel.stringValue = [[NSBundle mainBundle] infoDictionary][@"CFBundleVersion"];
 
   [self.simpleModificationsTableView reloadData];
+  [self.fnFunctionKeysTableView reloadData];
+  [self.devicesTableView reloadData];
   [self.logFileTextViewController monitor];
 
   [self launchctlConsoleUserServer:YES];
@@ -81,6 +88,7 @@
 
   } else {
     system([[NSString stringWithFormat:@"/bin/launchctl bootout %@ %@", domainTarget, plistFilePath] UTF8String]);
+    system([[NSString stringWithFormat:@"/bin/launchctl disable %@", serviceTarget] UTF8String]);
   }
 }
 

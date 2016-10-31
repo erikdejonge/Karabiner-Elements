@@ -14,21 +14,29 @@
 		345F95371DA2AC78002854B8 /* ConfigurationManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F95361DA2AC78002854B8 /* ConfigurationManager.m */; };
 		345F95401DA8E5FE002854B8 /* SimpleModificationsTableViewDataSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F953F1DA8E5FE002854B8 /* SimpleModificationsTableViewDataSource.m */; };
 		345F95451DAA3E04002854B8 /* SimpleModificationsTableViewDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F95441DAA3E04002854B8 /* SimpleModificationsTableViewDelegate.m */; };
-		345F95481DAA5DA1002854B8 /* ConfigurationCoreModel.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F95471DAA5DA1002854B8 /* ConfigurationCoreModel.m */; };
+		345F95481DAA5DA1002854B8 /* CoreConfigurationModel.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F95471DAA5DA1002854B8 /* CoreConfigurationModel.m */; };
 		345F954B1DAB8DAB002854B8 /* SimpleModificationsMenuManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F954A1DAB8DAB002854B8 /* SimpleModificationsMenuManager.m */; };
 		345F954E1DAB8EC2002854B8 /* simple_modifications.json in Resources */ = {isa = PBXBuildFile; fileRef = 345F954D1DAB8EC2002854B8 /* simple_modifications.json */; };
 		345F95511DABAF7A002854B8 /* SimpleModificationsTableCellView.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F95501DABAF7A002854B8 /* SimpleModificationsTableCellView.m */; };
 		345F95541DABE746002854B8 /* SimpleModificationsTableViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F95531DABE746002854B8 /* SimpleModificationsTableViewController.m */; };
-		345F95571DABFA29002854B8 /* JsonUtility.m in Sources */ = {isa = PBXBuildFile; fileRef = 345F95561DABFA29002854B8 /* JsonUtility.m */; };
 		3469EB6A1D8061E40005D30D /* PreferencesWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3469EB691D8061E40005D30D /* PreferencesWindowController.m */; };
 		3469EB6F1D8127980005D30D /* LogFileTextViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3469EB6E1D8127980005D30D /* LogFileTextViewController.m */; };
 		347112ED1D86E619001AC60D /* UpdaterController.m in Sources */ = {isa = PBXBuildFile; fileRef = 347112EC1D86E619001AC60D /* UpdaterController.m */; };
 		347112F11D87010A001AC60D /* Relauncher.m in Sources */ = {isa = PBXBuildFile; fileRef = 347112F01D87010A001AC60D /* Relauncher.m */; };
 		347113101D870D74001AC60D /* libkrbn.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3471130F1D870D74001AC60D /* libkrbn.a */; };
 		347113131D870F5F001AC60D /* libc++.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 347113121D870F5F001AC60D /* libc++.dylib */; };
+		34B97B1F1DBB292A00EB3583 /* JsonUtility.m in Sources */ = {isa = PBXBuildFile; fileRef = 34B97B1E1DBB292A00EB3583 /* JsonUtility.m */; };
+		34B97B2A1DBCC23D00EB3583 /* DevicesTableViewDataSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 34B97B291DBCC23D00EB3583 /* DevicesTableViewDataSource.m */; };
+		34B97B301DBE4B9B00EB3583 /* DeviceModel.m in Sources */ = {isa = PBXBuildFile; fileRef = 34B97B2F1DBE4B9B00EB3583 /* DeviceModel.m */; };
+		34B97B321DBE4EA100EB3583 /* DeviceManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 34B97B311DBE4EA100EB3583 /* DeviceManager.m */; };
+		34B97B351DBE58AA00EB3583 /* DevicesTableCellView.m in Sources */ = {isa = PBXBuildFile; fileRef = 34B97B341DBE58AA00EB3583 /* DevicesTableCellView.m */; };
+		34B97B391DBE5C9E00EB3583 /* DevicesTableViewDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 34B97B381DBE5C9E00EB3583 /* DevicesTableViewDelegate.m */; };
+		34B97B3C1DBEF9CA00EB3583 /* DevicesTableViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34B97B3B1DBEF9CA00EB3583 /* DevicesTableViewController.m */; };
 		34EEEEEC1DAE8A6E0026CAF7 /* FnFunctionKeysTableViewDataSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 34EEEEEB1DAE8A6E0026CAF7 /* FnFunctionKeysTableViewDataSource.m */; };
 		34EEEEEF1DAE8A9A0026CAF7 /* FnFunctionKeysTableViewDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 34EEEEEE1DAE8A9A0026CAF7 /* FnFunctionKeysTableViewDelegate.m */; };
 		34EEEEF31DAE8C6E0026CAF7 /* FnFunctionKeysTableViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34EEEEF21DAE8C6E0026CAF7 /* FnFunctionKeysTableViewController.m */; };
+		34FB68031DC3AD30009A3BA7 /* ic_mouse_black_48dp.png in Resources */ = {isa = PBXBuildFile; fileRef = 34FB68021DC3AD30009A3BA7 /* ic_mouse_black_48dp.png */; };
+		34FB68051DC3AD49009A3BA7 /* ic_keyboard_black_48dp.png in Resources */ = {isa = PBXBuildFile; fileRef = 34FB68041DC3AD49009A3BA7 /* ic_keyboard_black_48dp.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,8 +53,8 @@
 		345F953F1DA8E5FE002854B8 /* SimpleModificationsTableViewDataSource.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SimpleModificationsTableViewDataSource.m; sourceTree = "<group>"; };
 		345F95431DAA3E04002854B8 /* SimpleModificationsTableViewDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SimpleModificationsTableViewDelegate.h; sourceTree = "<group>"; };
 		345F95441DAA3E04002854B8 /* SimpleModificationsTableViewDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SimpleModificationsTableViewDelegate.m; sourceTree = "<group>"; };
-		345F95461DAA5DA1002854B8 /* ConfigurationCoreModel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConfigurationCoreModel.h; sourceTree = "<group>"; };
-		345F95471DAA5DA1002854B8 /* ConfigurationCoreModel.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ConfigurationCoreModel.m; sourceTree = "<group>"; };
+		345F95461DAA5DA1002854B8 /* CoreConfigurationModel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CoreConfigurationModel.h; sourceTree = "<group>"; };
+		345F95471DAA5DA1002854B8 /* CoreConfigurationModel.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = CoreConfigurationModel.m; sourceTree = "<group>"; };
 		345F95491DAB8DAB002854B8 /* SimpleModificationsMenuManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SimpleModificationsMenuManager.h; sourceTree = "<group>"; };
 		345F954A1DAB8DAB002854B8 /* SimpleModificationsMenuManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SimpleModificationsMenuManager.m; sourceTree = "<group>"; };
 		345F954D1DAB8EC2002854B8 /* simple_modifications.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; name = simple_modifications.json; path = Resources/simple_modifications.json; sourceTree = "<group>"; };
@@ -54,8 +62,6 @@
 		345F95501DABAF7A002854B8 /* SimpleModificationsTableCellView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SimpleModificationsTableCellView.m; sourceTree = "<group>"; };
 		345F95521DABE746002854B8 /* SimpleModificationsTableViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SimpleModificationsTableViewController.h; sourceTree = "<group>"; };
 		345F95531DABE746002854B8 /* SimpleModificationsTableViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SimpleModificationsTableViewController.m; sourceTree = "<group>"; };
-		345F95551DABFA29002854B8 /* JsonUtility.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JsonUtility.h; sourceTree = "<group>"; };
-		345F95561DABFA29002854B8 /* JsonUtility.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = JsonUtility.m; sourceTree = "<group>"; };
 		345F95581DAC111B002854B8 /* NotificationKeys.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = NotificationKeys.h; sourceTree = "<group>"; };
 		3469EB681D8061E40005D30D /* PreferencesWindowController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PreferencesWindowController.h; sourceTree = "<group>"; };
 		3469EB691D8061E40005D30D /* PreferencesWindowController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PreferencesWindowController.m; sourceTree = "<group>"; };
@@ -69,12 +75,28 @@
 		3471130F1D870D74001AC60D /* libkrbn.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libkrbn.a; path = ../../lib/libkrbn/build/Release/libkrbn.a; sourceTree = "<group>"; };
 		347113111D870E87001AC60D /* libkrbn.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = libkrbn.h; path = ../../lib/libkrbn/libkrbn.h; sourceTree = "<group>"; };
 		347113121D870F5F001AC60D /* libc++.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libc++.dylib"; path = "/usr/lib/libc++.dylib"; sourceTree = "<absolute>"; };
+		34B97B1D1DBB292A00EB3583 /* JsonUtility.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = JsonUtility.h; path = ../../share/JsonUtility.h; sourceTree = "<group>"; };
+		34B97B1E1DBB292A00EB3583 /* JsonUtility.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = JsonUtility.m; path = ../../share/JsonUtility.m; sourceTree = "<group>"; };
+		34B97B281DBCC23D00EB3583 /* DevicesTableViewDataSource.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DevicesTableViewDataSource.h; sourceTree = "<group>"; };
+		34B97B291DBCC23D00EB3583 /* DevicesTableViewDataSource.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DevicesTableViewDataSource.m; sourceTree = "<group>"; };
+		34B97B2D1DBE4B9B00EB3583 /* DeviceManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeviceManager.h; sourceTree = "<group>"; };
+		34B97B2E1DBE4B9B00EB3583 /* DeviceModel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeviceModel.h; sourceTree = "<group>"; };
+		34B97B2F1DBE4B9B00EB3583 /* DeviceModel.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DeviceModel.m; sourceTree = "<group>"; };
+		34B97B311DBE4EA100EB3583 /* DeviceManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DeviceManager.m; sourceTree = "<group>"; };
+		34B97B331DBE58AA00EB3583 /* DevicesTableCellView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DevicesTableCellView.h; sourceTree = "<group>"; };
+		34B97B341DBE58AA00EB3583 /* DevicesTableCellView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DevicesTableCellView.m; sourceTree = "<group>"; };
+		34B97B371DBE5C9E00EB3583 /* DevicesTableViewDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DevicesTableViewDelegate.h; sourceTree = "<group>"; };
+		34B97B381DBE5C9E00EB3583 /* DevicesTableViewDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DevicesTableViewDelegate.m; sourceTree = "<group>"; };
+		34B97B3A1DBEF9CA00EB3583 /* DevicesTableViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DevicesTableViewController.h; sourceTree = "<group>"; };
+		34B97B3B1DBEF9CA00EB3583 /* DevicesTableViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DevicesTableViewController.m; sourceTree = "<group>"; };
 		34EEEEEA1DAE8A6E0026CAF7 /* FnFunctionKeysTableViewDataSource.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FnFunctionKeysTableViewDataSource.h; sourceTree = "<group>"; };
 		34EEEEEB1DAE8A6E0026CAF7 /* FnFunctionKeysTableViewDataSource.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = FnFunctionKeysTableViewDataSource.m; sourceTree = "<group>"; };
 		34EEEEED1DAE8A9A0026CAF7 /* FnFunctionKeysTableViewDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FnFunctionKeysTableViewDelegate.h; sourceTree = "<group>"; };
 		34EEEEEE1DAE8A9A0026CAF7 /* FnFunctionKeysTableViewDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = FnFunctionKeysTableViewDelegate.m; sourceTree = "<group>"; };
 		34EEEEF11DAE8C6E0026CAF7 /* FnFunctionKeysTableViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FnFunctionKeysTableViewController.h; sourceTree = "<group>"; };
 		34EEEEF21DAE8C6E0026CAF7 /* FnFunctionKeysTableViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = FnFunctionKeysTableViewController.m; sourceTree = "<group>"; };
+		34FB68021DC3AD30009A3BA7 /* ic_mouse_black_48dp.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = ic_mouse_black_48dp.png; path = Resources/icons/ic_mouse_black_48dp.png; sourceTree = "<group>"; };
+		34FB68041DC3AD49009A3BA7 /* ic_keyboard_black_48dp.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = ic_keyboard_black_48dp.png; path = Resources/icons/ic_keyboard_black_48dp.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -112,10 +134,22 @@
 				3445E0651D801AF7004555F9 /* AppDelegate.h */,
 				3445E0661D801AF7004555F9 /* AppDelegate.m */,
 				3445E06B1D801AF7004555F9 /* Assets.xcassets */,
-				345F95461DAA5DA1002854B8 /* ConfigurationCoreModel.h */,
-				345F95471DAA5DA1002854B8 /* ConfigurationCoreModel.m */,
+				345F95461DAA5DA1002854B8 /* CoreConfigurationModel.h */,
+				345F95471DAA5DA1002854B8 /* CoreConfigurationModel.m */,
 				345F95351DA2AC78002854B8 /* ConfigurationManager.h */,
 				345F95361DA2AC78002854B8 /* ConfigurationManager.m */,
+				34B97B2D1DBE4B9B00EB3583 /* DeviceManager.h */,
+				34B97B311DBE4EA100EB3583 /* DeviceManager.m */,
+				34B97B2E1DBE4B9B00EB3583 /* DeviceModel.h */,
+				34B97B2F1DBE4B9B00EB3583 /* DeviceModel.m */,
+				34B97B331DBE58AA00EB3583 /* DevicesTableCellView.h */,
+				34B97B341DBE58AA00EB3583 /* DevicesTableCellView.m */,
+				34B97B3A1DBEF9CA00EB3583 /* DevicesTableViewController.h */,
+				34B97B3B1DBEF9CA00EB3583 /* DevicesTableViewController.m */,
+				34B97B281DBCC23D00EB3583 /* DevicesTableViewDataSource.h */,
+				34B97B291DBCC23D00EB3583 /* DevicesTableViewDataSource.m */,
+				34B97B371DBE5C9E00EB3583 /* DevicesTableViewDelegate.h */,
+				34B97B381DBE5C9E00EB3583 /* DevicesTableViewDelegate.m */,
 				34EEEEF11DAE8C6E0026CAF7 /* FnFunctionKeysTableViewController.h */,
 				34EEEEF21DAE8C6E0026CAF7 /* FnFunctionKeysTableViewController.m */,
 				34EEEEEA1DAE8A6E0026CAF7 /* FnFunctionKeysTableViewDataSource.h */,
@@ -123,8 +157,6 @@
 				34EEEEED1DAE8A9A0026CAF7 /* FnFunctionKeysTableViewDelegate.h */,
 				34EEEEEE1DAE8A9A0026CAF7 /* FnFunctionKeysTableViewDelegate.m */,
 				3445E0701D801AF7004555F9 /* Info.plist */,
-				345F95551DABFA29002854B8 /* JsonUtility.h */,
-				345F95561DABFA29002854B8 /* JsonUtility.m */,
 				3469EB6D1D8127980005D30D /* LogFileTextViewController.h */,
 				3469EB6E1D8127980005D30D /* LogFileTextViewController.m */,
 				3445E06D1D801AF7004555F9 /* MainMenu.xib */,
@@ -164,6 +196,8 @@
 		345F954C1DAB8EB7002854B8 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				34FB68041DC3AD49009A3BA7 /* ic_keyboard_black_48dp.png */,
+				34FB68021DC3AD30009A3BA7 /* ic_mouse_black_48dp.png */,
 				345F954D1DAB8EC2002854B8 /* simple_modifications.json */,
 			);
 			name = Resources;
@@ -172,6 +206,8 @@
 		3469EB6B1D806AD60005D30D /* share */ = {
 			isa = PBXGroup;
 			children = (
+				34B97B1D1DBB292A00EB3583 /* JsonUtility.h */,
+				34B97B1E1DBB292A00EB3583 /* JsonUtility.m */,
 				347112EF1D87010A001AC60D /* Relauncher.h */,
 				347112F01D87010A001AC60D /* Relauncher.m */,
 				3469EB6C1D806AEA0005D30D /* weakify.h */,
@@ -236,6 +272,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				345F954E1DAB8EC2002854B8 /* simple_modifications.json in Resources */,
+				34FB68031DC3AD30009A3BA7 /* ic_mouse_black_48dp.png in Resources */,
+				34FB68051DC3AD49009A3BA7 /* ic_keyboard_black_48dp.png in Resources */,
 				3445E06C1D801AF7004555F9 /* Assets.xcassets in Resources */,
 				3445E06F1D801AF7004555F9 /* MainMenu.xib in Resources */,
 			);
@@ -249,13 +287,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				34EEEEEF1DAE8A9A0026CAF7 /* FnFunctionKeysTableViewDelegate.m in Sources */,
-				345F95571DABFA29002854B8 /* JsonUtility.m in Sources */,
+				34B97B321DBE4EA100EB3583 /* DeviceManager.m in Sources */,
+				34B97B3C1DBEF9CA00EB3583 /* DevicesTableViewController.m in Sources */,
 				345F95541DABE746002854B8 /* SimpleModificationsTableViewController.m in Sources */,
+				34B97B301DBE4B9B00EB3583 /* DeviceModel.m in Sources */,
 				345F954B1DAB8DAB002854B8 /* SimpleModificationsMenuManager.m in Sources */,
 				347112ED1D86E619001AC60D /* UpdaterController.m in Sources */,
+				34B97B391DBE5C9E00EB3583 /* DevicesTableViewDelegate.m in Sources */,
 				34EEEEEC1DAE8A6E0026CAF7 /* FnFunctionKeysTableViewDataSource.m in Sources */,
 				3469EB6F1D8127980005D30D /* LogFileTextViewController.m in Sources */,
 				34EEEEF31DAE8C6E0026CAF7 /* FnFunctionKeysTableViewController.m in Sources */,
+				34B97B351DBE58AA00EB3583 /* DevicesTableCellView.m in Sources */,
 				345F95451DAA3E04002854B8 /* SimpleModificationsTableViewDelegate.m in Sources */,
 				347112F11D87010A001AC60D /* Relauncher.m in Sources */,
 				345F95371DA2AC78002854B8 /* ConfigurationManager.m in Sources */,
@@ -263,8 +305,10 @@
 				345F95511DABAF7A002854B8 /* SimpleModificationsTableCellView.m in Sources */,
 				3445E06A1D801AF7004555F9 /* main.m in Sources */,
 				3469EB6A1D8061E40005D30D /* PreferencesWindowController.m in Sources */,
+				34B97B2A1DBCC23D00EB3583 /* DevicesTableViewDataSource.m in Sources */,
+				34B97B1F1DBB292A00EB3583 /* JsonUtility.m in Sources */,
 				3445E0671D801AF7004555F9 /* AppDelegate.m in Sources */,
-				345F95481DAA5DA1002854B8 /* ConfigurationCoreModel.m in Sources */,
+				345F95481DAA5DA1002854B8 /* CoreConfigurationModel.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

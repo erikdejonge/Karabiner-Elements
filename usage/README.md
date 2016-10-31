@@ -3,6 +3,7 @@
 * [Quit Karabiner-Elements](#quit-karabiner-elements)
 * [Uninstall Karabiner-Elements](#uninstall-karabiner-elements)
 * [How to configure Karabiner-Elements](#how-to-configure-karabiner-elements)
+* [Set keyboard type](#set-keyboard-type)
 
 # Installation
 
@@ -37,6 +38,19 @@ You can add key modification configurations from Preferences.
 <img src="img/simple_modifications1.png" width="400">
 
 <img src="img/simple_modifications2.png" width="400">
+
+You can investigate the key name in Karabiner-EventViewer.
+
+<img src="img/keycode.png" width="400">
+
+# Set keyboard type
+
+You can set keyboard type in Devices tab.
+
+<img src="img/keyboard_type.png" width="400">
+
+If you are using multiple keyboards which have different keyboard types, you have to set the keyboard type in Devices tab.
+Otherwise, Karabiner-Elements cannot treat keyboard type properly due to a limitation of macOS.
 
 # Learn about `karabiner.json`
 

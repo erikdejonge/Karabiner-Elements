@@ -26,6 +26,9 @@ enum class operation_type : uint8_t {
   add_simple_modification,
   clear_fn_function_keys,
   add_fn_function_key,
+  clear_devices,
+  add_device,
+  complete_devices,
   // event_dispatcher -> grabber
   set_caps_lock_led_state,
   // grabber -> event_dispatcher
@@ -198,6 +201,34 @@ enum class modifier_flag : uint32_t {
 enum class led_state : uint32_t {
   on,
   off,
+};
+
+enum class vendor_id : uint32_t {
+};
+
+enum class product_id : uint32_t {
+};
+
+enum class location_id : uint32_t {
+};
+
+enum class keyboard_type : uint32_t {
+  none = 0,
+  ansi = 40,
+  iso = 41,
+  jis = 42,
+};
+
+struct device_identifiers_struct {
+  vendor_id vendor_id;
+  product_id product_id;
+  bool is_keyboard;
+  bool is_pointing_device;
+};
+
+struct device_configuration_struct {
+  bool ignore;
+  keyboard_type keyboard_type;
 };
 
 class types final {
@@ -686,9 +717,9 @@ public:
       map[key_code::vk_consumer_brightness_up] = NX_KEYTYPE_BRIGHTNESS_UP;
       map[key_code::vk_consumer_illumination_down] = NX_KEYTYPE_ILLUMINATION_DOWN;
       map[key_code::vk_consumer_illumination_up] = NX_KEYTYPE_ILLUMINATION_UP;
-      map[key_code::vk_consumer_next] = NX_KEYTYPE_NEXT;
+      map[key_code::vk_consumer_next] = NX_KEYTYPE_FAST;
       map[key_code::vk_consumer_play] = NX_KEYTYPE_PLAY;
-      map[key_code::vk_consumer_previous] = NX_KEYTYPE_PREVIOUS;
+      map[key_code::vk_consumer_previous] = NX_KEYTYPE_REWIND;
     }
     return map;
   }
@@ -753,6 +784,26 @@ struct operation_type_add_fn_function_key_struct {
   key_code to_key_code;
 };
 
+struct operation_type_clear_devices_struct {
+  operation_type_clear_devices_struct(void) : operation_type(operation_type::clear_devices) {}
+
+  const operation_type operation_type;
+};
+
+struct operation_type_add_device_struct {
+  operation_type_add_device_struct(void) : operation_type(operation_type::add_device) {}
+
+  const operation_type operation_type;
+  device_identifiers_struct device_identifiers_struct;
+  device_configuration_struct device_configuration_struct;
+};
+
+struct operation_type_complete_devices_struct {
+  operation_type_complete_devices_struct(void) : operation_type(operation_type::complete_devices) {}
+
+  const operation_type operation_type;
+};
+
 struct operation_type_set_caps_lock_led_state_struct {
   operation_type_set_caps_lock_led_state_struct(void) : operation_type(operation_type::set_caps_lock_led_state) {}
 
@@ -779,6 +830,7 @@ struct operation_type_post_modifier_flags_struct {
   const operation_type operation_type;
   key_code key_code;
   IOOptionBits flags;
+  keyboard_type keyboard_type;
 };
 
 struct operation_type_post_key_struct {
@@ -788,6 +840,7 @@ struct operation_type_post_key_struct {
   key_code key_code;
   event_type event_type;
   IOOptionBits flags;
+  keyboard_type keyboard_type;
   bool repeat;
 };
 }
