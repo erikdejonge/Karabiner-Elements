@@ -11,17 +11,23 @@ Karabiner-Elements is the subset of the next generation Karabiner for macOS Sier
 
 ## Project Status
 
-Karabiner-Elements works fine except Preferences GUI.
+Karabiner-Elements works fine.
 
 You can download the latest Karabiner-Elements from https://pqrs.org/latest/karabiner-elements-latest.dmg
 
-# [Usage](usage/README.md)
+# Usage
+
+Detailed usage instructions are available [here](usage/README.md).
 
 ## Features
 
 * Simple key modification (change keys to another keys)
 * Support Secure Keyboard Entry (eg. Terminal, Password prompt)
 * Modifier flags sharing with all connected keyboards.
+
+## Limitations
+
+* Karabiner-Elements cannot modify eject key due to the limitation of macOS API.
 
 ## How to build
 

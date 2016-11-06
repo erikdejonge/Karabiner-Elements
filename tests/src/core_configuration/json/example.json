@@ -38,7 +38,9 @@
                         "is_keyboard": true,
                         "is_pointing_device": false
                     },
-                    "ignore": true
+                    "ignore": true,
+                    "keyboard_type": 40,
+                    "disable_built_in_keyboard_if_exists": true
                 }
             ]
         },

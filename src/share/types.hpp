@@ -212,6 +212,13 @@ enum class product_id : uint32_t {
 enum class location_id : uint32_t {
 };
 
+enum class keyboard_type : uint32_t {
+  none = 0,
+  ansi = 40,
+  iso = 41,
+  jis = 42,
+};
+
 struct device_identifiers_struct {
   vendor_id vendor_id;
   product_id product_id;
@@ -219,10 +226,10 @@ struct device_identifiers_struct {
   bool is_pointing_device;
 };
 
-enum class keyboard_type {
-  ansi = 40,
-  iso = 41,
-  jis = 42,
+struct device_configuration_struct {
+  bool ignore;
+  keyboard_type keyboard_type;
+  bool disable_built_in_keyboard_if_exists;
 };
 
 class types final {
@@ -789,7 +796,7 @@ struct operation_type_add_device_struct {
 
   const operation_type operation_type;
   device_identifiers_struct device_identifiers_struct;
-  bool ignore;
+  device_configuration_struct device_configuration_struct;
 };
 
 struct operation_type_complete_devices_struct {
@@ -824,6 +831,7 @@ struct operation_type_post_modifier_flags_struct {
   const operation_type operation_type;
   key_code key_code;
   IOOptionBits flags;
+  keyboard_type keyboard_type;
 };
 
 struct operation_type_post_key_struct {
@@ -833,6 +841,7 @@ struct operation_type_post_key_struct {
   key_code key_code;
   event_type event_type;
   IOOptionBits flags;
+  keyboard_type keyboard_type;
   bool repeat;
 };
 }

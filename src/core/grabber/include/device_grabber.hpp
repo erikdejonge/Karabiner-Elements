@@ -8,7 +8,6 @@
 #include "gcd_utility.hpp"
 #include "human_interface_device.hpp"
 #include "iokit_utility.hpp"
-#include "iopm_client.hpp"
 #include "logger.hpp"
 #include "manipulator.hpp"
 #include "spdlog_utility.hpp"
@@ -48,16 +47,11 @@ public:
 
       IOHIDManagerScheduleWithRunLoop(manager_, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
     }
-
-    iopm_client_ = std::make_unique<iopm_client>(logger::get_logger(),
-                                                 std::bind(&device_grabber::iopm_client_callback, this, std::placeholders::_1));
   }
 
   ~device_grabber(void) {
     // Release manager_ in main thread to avoid callback invocations after object has been destroyed.
     gcd_utility::dispatch_sync_in_main_queue(^{
-      iopm_client_ = nullptr;
-
       stop_grabbing();
 
       if (manager_) {
@@ -97,6 +91,8 @@ public:
           (it.second)->grab();
         }
       }
+
+      enable_devices();
     });
   }
 
@@ -138,20 +134,26 @@ public:
     });
   }
 
-  void clear_devices_configuration(void) {
+  void clear_device_configurations(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
-      devices_configuration_.clear();
+      device_configurations_.clear();
     });
   }
 
-  void add_device_configuration(const krbn::device_identifiers_struct& device_identifiers_struct, bool ignore) {
+  void add_device_configuration(const krbn::device_identifiers_struct& device_identifiers_struct,
+                                const krbn::device_configuration_struct& device_configuration_struct) {
     gcd_utility::dispatch_sync_in_main_queue(^{
-      devices_configuration_.push_back(std::make_pair(device_identifiers_struct, ignore));
+      device_configurations_.push_back(std::make_pair(device_identifiers_struct, device_configuration_struct));
     });
   }
 
-  void complete_devices_configuration(void) {
+  void complete_device_configurations(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
+      for (auto&& it : hids_) {
+        (it.second)->set_keyboard_type(get_keyboard_type(*(it.second)));
+        (it.second)->set_disable_built_in_keyboard_if_exists(get_disable_built_in_keyboard_if_exists(*(it.second)));
+      }
+
       grab_devices();
       output_devices_json();
     });
@@ -170,21 +172,6 @@ private:
     observing,
     grabbing,
   };
-
-  void iopm_client_callback(uint32_t message_type) {
-    switch (message_type) {
-    case kIOMessageSystemWillSleep:
-      suspend();
-      break;
-
-    case kIOMessageSystemWillPowerOn:
-      resume();
-      break;
-
-    default:
-      break;
-    }
-  }
 
   static void static_device_matching_callback(void* _Nullable context, IOReturn result, void* _Nullable sender, IOHIDDeviceRef _Nonnull device) {
     if (result != kIOReturnSuccess) {
@@ -207,8 +194,12 @@ private:
     iokit_utility::log_matching_device(logger::get_logger(), device);
 
     auto dev = std::make_unique<human_interface_device>(logger::get_logger(), device);
+    dev->set_keyboard_type(get_keyboard_type(*dev));
+    dev->set_disable_built_in_keyboard_if_exists(get_disable_built_in_keyboard_if_exists(*dev));
     dev->set_is_grabbable_callback(std::bind(&device_grabber::is_grabbable_callback, this, std::placeholders::_1));
     dev->set_grabbed_callback(std::bind(&device_grabber::grabbed_callback, this, std::placeholders::_1));
+    dev->set_ungrabbed_callback(std::bind(&device_grabber::ungrabbed_callback, this, std::placeholders::_1));
+    dev->set_disabled_callback(std::bind(&device_grabber::disabled_callback, this, std::placeholders::_1));
     dev->set_value_callback(std::bind(&device_grabber::value_callback,
                                       this,
                                       std::placeholders::_1,
@@ -272,6 +263,11 @@ private:
     }
 
     event_manipulator_.stop_key_repeat();
+
+    // ----------------------------------------
+    if (mode_ == mode::grabbing) {
+      enable_devices();
+    }
   }
 
   void value_callback(human_interface_device& device,
@@ -288,7 +284,7 @@ private:
 
     if (auto key_code = krbn::types::get_key_code(usage_page, usage)) {
       bool pressed = integer_value;
-      event_manipulator_.handle_keyboard_event(device_registry_entry_id, *key_code, pressed);
+      event_manipulator_.handle_keyboard_event(device_registry_entry_id, *key_code, device.get_keyboard_type(), pressed);
 
     } else if (auto pointing_button = krbn::types::get_pointing_button(usage_page, usage)) {
       event_manipulator_.handle_pointing_event(device_registry_entry_id,
@@ -337,13 +333,19 @@ private:
     if (get_all_devices_pressed_keys_count() == 0) {
       event_manipulator_.reset_modifier_flag_state();
       event_manipulator_.reset_pointing_button_state();
+      event_manipulator_.stop_key_repeat();
     }
   }
 
   human_interface_device::grabbable_state is_grabbable_callback(human_interface_device& device) {
     if (is_ignored_device(device)) {
-      logger::get_logger().info("{0} is ignored.", device.get_name_for_log());
-      return human_interface_device::grabbable_state::ungrabbable_permanently;
+      // If we need to disable the built-in keyboard, we have to grab it.
+      if (device.is_built_in_keyboard() && need_to_disable_built_in_keyboard()) {
+        // Do nothing
+      } else {
+        logger::get_logger().info("{0} is ignored.", device.get_name_for_log());
+        return human_interface_device::grabbable_state::ungrabbable_permanently;
+      }
     }
     if (!event_manipulator_.is_ready()) {
       is_grabbable_callback_log_reducer_.warn("event_manipulator_ is not ready. Please wait for a while.");
@@ -355,6 +357,16 @@ private:
   void grabbed_callback(human_interface_device& device) {
     // set keyboard led
     event_manipulator_.refresh_caps_lock_led();
+  }
+
+  void ungrabbed_callback(human_interface_device& device) {
+    // stop key repeat
+    event_manipulator_.stop_key_repeat();
+  }
+
+  void disabled_callback(human_interface_device& device) {
+    // stop key repeat
+    event_manipulator_.stop_key_repeat();
   }
 
   size_t get_all_devices_pressed_keys_count(void) {
@@ -383,13 +395,13 @@ private:
     return false;
   }
 
-  bool is_ignored_device(const human_interface_device& device) {
+  boost::optional<const krbn::device_configuration_struct&> find_device_configuration_struct(const human_interface_device& device) {
     if (auto vendor_id = device.get_vendor_id()) {
       if (auto product_id = device.get_product_id()) {
         bool is_keyboard = device.is_keyboard();
         bool is_pointing_device = device.is_pointing_device();
 
-        for (const auto& d : devices_configuration_) {
+        for (const auto& d : device_configurations_) {
           if (d.first.vendor_id == *vendor_id &&
               d.first.product_id == *product_id &&
               d.first.is_keyboard == is_keyboard &&
@@ -399,12 +411,52 @@ private:
         }
       }
     }
+    return boost::none;
+  }
+
+  bool is_ignored_device(const human_interface_device& device) {
+    if (auto s = find_device_configuration_struct(device)) {
+      return s->ignore;
+    }
 
     if (device.is_pointing_device()) {
       return true;
     }
 
     return false;
+  }
+
+  krbn::keyboard_type get_keyboard_type(const human_interface_device& device) {
+    if (auto s = find_device_configuration_struct(device)) {
+      return s->keyboard_type;
+    }
+    return krbn::keyboard_type::none;
+  }
+
+  bool get_disable_built_in_keyboard_if_exists(const human_interface_device& device) {
+    if (auto s = find_device_configuration_struct(device)) {
+      return s->disable_built_in_keyboard_if_exists;
+    }
+    return false;
+  }
+
+  bool need_to_disable_built_in_keyboard(void) {
+    for (const auto& it : hids_) {
+      if ((it.second)->get_disable_built_in_keyboard_if_exists()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void enable_devices(void) {
+    for (const auto& it : hids_) {
+      if ((it.second)->is_built_in_keyboard() && need_to_disable_built_in_keyboard()) {
+        (it.second)->disable();
+      } else {
+        (it.second)->enable();
+      }
+    }
   }
 
   void output_devices_json(void) {
@@ -435,6 +487,7 @@ private:
         j["descriptions"]["product"] = boost::trim_copy(*product);
       }
       j["ignore"] = is_ignored_device(*(it.second));
+      j["is_built_in_keyboard"] = (it.second)->is_built_in_keyboard();
 
       if (!j.empty()) {
         json.push_back(j);
@@ -450,9 +503,8 @@ private:
 
   manipulator::event_manipulator& event_manipulator_;
   IOHIDManagerRef _Nullable manager_;
-  std::unique_ptr<iopm_client> iopm_client_;
 
-  std::vector<std::pair<krbn::device_identifiers_struct, bool>> devices_configuration_;
+  std::vector<std::pair<krbn::device_identifiers_struct, krbn::device_configuration_struct>> device_configurations_;
 
   std::unordered_map<IOHIDDeviceRef, std::unique_ptr<human_interface_device>> hids_;
 

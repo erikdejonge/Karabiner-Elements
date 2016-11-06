@@ -129,7 +129,10 @@ public:
     virtual_hid_manager_client_ = nullptr;
   }
 
-  void handle_keyboard_event(device_registry_entry_id device_registry_entry_id, krbn::key_code from_key_code, bool pressed) {
+  void handle_keyboard_event(device_registry_entry_id device_registry_entry_id,
+                             krbn::key_code from_key_code,
+                             krbn::keyboard_type keyboard_type,
+                             bool pressed) {
     krbn::key_code to_key_code = from_key_code;
 
     // ----------------------------------------
@@ -220,12 +223,12 @@ public:
       return;
     }
 
-    if (post_modifier_flag_event(to_key_code, pressed)) {
+    if (post_modifier_flag_event(to_key_code, keyboard_type, pressed)) {
       key_repeat_manager_.stop();
       return;
     }
 
-    post_key(from_key_code, to_key_code, pressed, false);
+    post_key(from_key_code, to_key_code, keyboard_type, pressed, false);
 
     // set key repeat
     long initial_key_repeat_milliseconds = 0;
@@ -236,7 +239,7 @@ public:
       key_repeat_milliseconds = system_preferences_values_.get_key_repeat_milliseconds();
     }
 
-    key_repeat_manager_.start(from_key_code, to_key_code, pressed,
+    key_repeat_manager_.start(from_key_code, to_key_code, keyboard_type, pressed,
                               initial_key_repeat_milliseconds, key_repeat_milliseconds);
   }
 
@@ -413,7 +416,8 @@ private:
       stop();
     }
 
-    void start(krbn::key_code from_key_code, krbn::key_code to_key_code, bool pressed,
+    void start(krbn::key_code from_key_code, krbn::key_code to_key_code,
+               krbn::keyboard_type keyboard_type, bool pressed,
                long initial_key_repeat_milliseconds, long key_repeat_milliseconds) {
       // stop key repeat before post key.
       if (pressed) {
@@ -437,7 +441,7 @@ private:
             key_repeat_milliseconds * NSEC_PER_MSEC,
             0,
             ^{
-              event_manipulator_.post_key(from_key_code, to_key_code, pressed, true);
+              event_manipulator_.post_key(from_key_code, to_key_code, keyboard_type, pressed, true);
             });
 
         from_key_code_ = from_key_code;
@@ -456,7 +460,7 @@ private:
     boost::optional<krbn::key_code> from_key_code_;
   };
 
-  bool post_modifier_flag_event(krbn::key_code key_code, bool pressed) {
+  bool post_modifier_flag_event(krbn::key_code key_code, krbn::keyboard_type keyboard_type, bool pressed) {
     auto operation = pressed ? manipulator::modifier_flag_manager::operation::increase : manipulator::modifier_flag_manager::operation::decrease;
 
     auto modifier_flag = krbn::types::get_modifier_flag(key_code);
@@ -464,7 +468,7 @@ private:
       modifier_flag_manager_.manipulate(modifier_flag, operation);
 
       auto flags = modifier_flag_manager_.get_io_option_bits(key_code);
-      event_dispatcher_manager_.post_modifier_flags(key_code, flags);
+      event_dispatcher_manager_.post_modifier_flags(key_code, flags, keyboard_type);
 
       return true;
     }
@@ -481,13 +485,13 @@ private:
     }
   }
 
-  void post_key(krbn::key_code from_key_code, krbn::key_code to_key_code, bool pressed, bool repeat) {
+  void post_key(krbn::key_code from_key_code, krbn::key_code to_key_code, krbn::keyboard_type keyboard_type, bool pressed, bool repeat) {
     auto hid_system_key = krbn::types::get_hid_system_key(to_key_code);
     auto hid_system_aux_control_button = krbn::types::get_hid_system_aux_control_button(to_key_code);
     if (hid_system_key || hid_system_aux_control_button) {
       auto event_type = pressed ? krbn::event_type::key_down : krbn::event_type::key_up;
       auto flags = modifier_flag_manager_.get_io_option_bits(to_key_code);
-      event_dispatcher_manager_.post_key(to_key_code, event_type, flags, repeat);
+      event_dispatcher_manager_.post_key(to_key_code, event_type, flags, keyboard_type, repeat);
     }
   }
 
