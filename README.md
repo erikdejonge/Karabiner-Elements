@@ -15,7 +15,9 @@ Karabiner-Elements works fine.
 
 You can download the latest Karabiner-Elements from https://pqrs.org/latest/karabiner-elements-latest.dmg
 
-# [Usage](usage/README.md)
+# Usage
+
+Detailed usage instructions are available [here](usage/README.md).
 
 ## Features
 
@@ -26,6 +28,7 @@ You can download the latest Karabiner-Elements from https://pqrs.org/latest/kara
 ## Limitations
 
 * Karabiner-Elements cannot modify eject key due to the limitation of macOS API.
+* Karabiner-Elements ignores the `System Preferences > Keyboard > Modifier Keys...` configuration.
 
 ## How to build
 

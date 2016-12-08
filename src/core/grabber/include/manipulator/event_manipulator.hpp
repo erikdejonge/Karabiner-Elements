@@ -3,7 +3,6 @@
 #include "boost_defs.hpp"
 
 #include "event_dispatcher_manager.hpp"
-#include "event_tap_manager.hpp"
 #include "gcd_utility.hpp"
 #include "logger.hpp"
 #include "manipulator.hpp"
@@ -11,7 +10,7 @@
 #include "pointing_button_manager.hpp"
 #include "system_preferences.hpp"
 #include "types.hpp"
-#include "virtual_hid_manager_client.hpp"
+#include "virtual_hid_device_client.hpp"
 #include <IOKit/hidsystem/ev_keymap.h>
 #include <boost/optional.hpp>
 #include <list>
@@ -23,24 +22,29 @@ class event_manipulator final {
 public:
   event_manipulator(const event_manipulator&) = delete;
 
-  event_manipulator(void) : event_dispatcher_manager_(),
+  event_manipulator(void) : virtual_hid_device_client_(logger::get_logger(),
+                                                       std::bind(&event_manipulator::virtual_hid_device_client_connected_callback, this, std::placeholders::_1)),
+                            event_dispatcher_manager_(),
                             key_repeat_manager_(*this) {
   }
 
   ~event_manipulator(void) {
-    event_tap_manager_ = nullptr;
   }
 
-  bool is_ready(void) {
-    return event_dispatcher_manager_.is_connected();
-  }
+  enum class ready_state {
+    ready,
+    virtual_hid_device_client_is_not_ready,
+    event_dispatcher_manager_is_not_ready,
+  };
 
-  void grab_mouse_events(void) {
-    event_tap_manager_ = std::make_unique<event_tap_manager>();
-  }
-
-  void ungrab_mouse_events(void) {
-    event_tap_manager_ = nullptr;
+  ready_state is_ready(void) {
+    if (!virtual_hid_device_client_.is_connected()) {
+      return ready_state::virtual_hid_device_client_is_not_ready;
+    }
+    if (!event_dispatcher_manager_.is_connected()) {
+      return ready_state::event_dispatcher_manager_is_not_ready;
+    }
+    return ready_state::ready;
   }
 
   void reset(void) {
@@ -52,19 +56,14 @@ public:
     modifier_flag_manager_.reset();
     modifier_flag_manager_.unlock();
 
+    virtual_hid_keyboard_pressed_keys_.clear();
+
     event_dispatcher_manager_.set_caps_lock_state(false);
 
     pointing_button_manager_.reset();
-    {
-      std::lock_guard<std::mutex> guard(virtual_hid_manager_client_mutex_);
 
-      if (virtual_hid_manager_client_) {
-        pqrs::karabiner_virtualhiddevice::hid_report::pointing_input report;
-        virtual_hid_manager_client_->post_pointing_input_report(report);
-      }
-
-      virtual_hid_manager_client_ = nullptr;
-    }
+    // Do not call terminate_virtual_hid_keyboard
+    virtual_hid_device_client_.terminate_virtual_hid_pointing();
   }
 
   void reset_modifier_flag_state(void) {
@@ -75,13 +74,8 @@ public:
   void reset_pointing_button_state(void) {
     auto bits = pointing_button_manager_.get_hid_report_bits();
     pointing_button_manager_.reset();
-    {
-      std::lock_guard<std::mutex> guard(virtual_hid_manager_client_mutex_);
-
-      if (bits && virtual_hid_manager_client_) {
-        pqrs::karabiner_virtualhiddevice::hid_report::pointing_input report;
-        virtual_hid_manager_client_->post_pointing_input_report(report);
-      }
+    if (bits) {
+      virtual_hid_device_client_.reset_virtual_hid_pointing();
     }
   }
 
@@ -115,18 +109,22 @@ public:
     event_dispatcher_manager_.create_event_dispatcher_client();
   }
 
-  void create_virtual_hid_manager_client(void) {
-    std::lock_guard<std::mutex> guard(virtual_hid_manager_client_mutex_);
-
-    if (!virtual_hid_manager_client_) {
-      virtual_hid_manager_client_ = std::make_unique<virtual_hid_manager_client>(logger::get_logger());
-    }
+  void initialize_virtual_hid_pointing(void) {
+    virtual_hid_device_client_.initialize_virtual_hid_pointing();
   }
 
-  void release_virtual_hid_manager_client(void) {
-    std::lock_guard<std::mutex> guard(virtual_hid_manager_client_mutex_);
+  void terminate_virtual_hid_pointing(void) {
+    virtual_hid_device_client_.terminate_virtual_hid_pointing();
+  }
 
-    virtual_hid_manager_client_ = nullptr;
+  void set_caps_lock_state(bool state) {
+    modifier_flag_manager_.manipulate(krbn::modifier_flag::caps_lock,
+                                      state ? modifier_flag_manager::operation::lock : modifier_flag_manager::operation::unlock);
+
+    // Do not call event_dispatcher_manager_.set_caps_lock_state here.
+    //
+    // This method should be called in event_tap_manager_.caps_lock_state_changed_callback.
+    // Thus, the caps lock state in IOHIDSystem is already changed.
   }
 
   void handle_keyboard_event(device_registry_entry_id device_registry_entry_id,
@@ -216,9 +214,18 @@ public:
     // Post input events to karabiner_event_dispatcher
 
     if (to_key_code == krbn::key_code::caps_lock) {
-      if (pressed) {
-        toggle_caps_lock_state();
-        key_repeat_manager_.stop();
+      if (auto hid_system_key = krbn::types::get_hid_system_key(to_key_code)) {
+        if (pressed) {
+          virtual_hid_keyboard_pressed_keys_.add(*hid_system_key);
+          key_repeat_manager_.stop();
+        } else {
+          virtual_hid_keyboard_pressed_keys_.remove(*hid_system_key);
+        }
+
+        pqrs::karabiner_virtual_hid_device::hid_report::keyboard_input report;
+        report.modifiers = modifier_flag_manager_.get_hid_report_bits();
+        virtual_hid_keyboard_pressed_keys_.set_report_keys(report);
+        virtual_hid_device_client_.post_keyboard_input_report(report);
       }
       return;
     }
@@ -247,7 +254,7 @@ public:
                              krbn::pointing_event pointing_event,
                              boost::optional<krbn::pointing_button> pointing_button,
                              CFIndex integer_value) {
-    pqrs::karabiner_virtualhiddevice::hid_report::pointing_input report;
+    pqrs::karabiner_virtual_hid_device::hid_report::pointing_input report;
 
     switch (pointing_event) {
     case krbn::pointing_event::button:
@@ -282,22 +289,11 @@ public:
     report.buttons[1] = (bits >> 8) & 0xff;
     report.buttons[2] = (bits >> 16) & 0xff;
     report.buttons[3] = (bits >> 24) & 0xff;
-
-    {
-      std::lock_guard<std::mutex> guard(virtual_hid_manager_client_mutex_);
-
-      if (virtual_hid_manager_client_) {
-        virtual_hid_manager_client_->post_pointing_input_report(report);
-      }
-    }
+    virtual_hid_device_client_.post_pointing_input_report(report);
   }
 
   void stop_key_repeat(void) {
     key_repeat_manager_.stop();
-  }
-
-  void refresh_caps_lock_led(void) {
-    event_dispatcher_manager_.refresh_caps_lock_led();
   }
 
 private:
@@ -366,6 +362,49 @@ private:
     };
 
     std::list<manipulated_key> manipulated_keys_;
+    std::mutex mutex_;
+  };
+
+  class virtual_hid_keyboard_pressed_keys final {
+  public:
+    virtual_hid_keyboard_pressed_keys(const virtual_hid_keyboard_pressed_keys&) = delete;
+
+    virtual_hid_keyboard_pressed_keys(void) {
+    }
+
+    void clear(void) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
+      keys_.clear();
+    }
+
+    void add(uint8_t hid_system_key) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
+      if (std::find(keys_.begin(), keys_.end(), hid_system_key) == keys_.end()) {
+        keys_.push_back(hid_system_key);
+      }
+    }
+
+    void remove(uint8_t hid_system_key) {
+      std::lock_guard<std::mutex> guard(mutex_);
+
+      keys_.remove(hid_system_key);
+    }
+
+    void set_report_keys(pqrs::karabiner_virtual_hid_device::hid_report::keyboard_input& report) {
+      size_t i = 0;
+      for (const auto& key : keys_) {
+        if (i >= sizeof(report.keys) / sizeof(report.keys[0])) {
+          break;
+        }
+        report.keys[i] = key;
+        ++i;
+      }
+    }
+
+  private:
+    std::list<uint8_t> keys_;
     std::mutex mutex_;
   };
 
@@ -460,6 +499,10 @@ private:
     boost::optional<krbn::key_code> from_key_code_;
   };
 
+  void virtual_hid_device_client_connected_callback(virtual_hid_device_client& virtual_hid_device_client) {
+    virtual_hid_device_client.initialize_virtual_hid_keyboard();
+  }
+
   bool post_modifier_flag_event(krbn::key_code key_code, krbn::keyboard_type keyboard_type, bool pressed) {
     auto operation = pressed ? manipulator::modifier_flag_manager::operation::increase : manipulator::modifier_flag_manager::operation::decrease;
 
@@ -467,22 +510,20 @@ private:
     if (modifier_flag != krbn::modifier_flag::zero) {
       modifier_flag_manager_.manipulate(modifier_flag, operation);
 
-      auto flags = modifier_flag_manager_.get_io_option_bits(key_code);
-      event_dispatcher_manager_.post_modifier_flags(key_code, flags, keyboard_type);
+      if (modifier_flag == krbn::modifier_flag::fn) {
+        auto flags = modifier_flag_manager_.get_io_option_bits(key_code);
+        event_dispatcher_manager_.post_modifier_flags(key_code, flags, keyboard_type);
+      } else {
+        pqrs::karabiner_virtual_hid_device::hid_report::keyboard_input report;
+        report.modifiers = modifier_flag_manager_.get_hid_report_bits();
+        virtual_hid_keyboard_pressed_keys_.set_report_keys(report);
+        virtual_hid_device_client_.post_keyboard_input_report(report);
+      }
 
       return true;
     }
 
     return false;
-  }
-
-  void toggle_caps_lock_state(void) {
-    modifier_flag_manager_.manipulate(krbn::modifier_flag::caps_lock, modifier_flag_manager::operation::toggle_lock);
-    if (modifier_flag_manager_.pressed(krbn::modifier_flag::caps_lock)) {
-      event_dispatcher_manager_.set_caps_lock_state(true);
-    } else {
-      event_dispatcher_manager_.set_caps_lock_state(false);
-    }
   }
 
   void post_key(krbn::key_code from_key_code, krbn::key_code to_key_code, krbn::keyboard_type keyboard_type, bool pressed, bool repeat) {
@@ -495,14 +536,12 @@ private:
     }
   }
 
+  virtual_hid_device_client virtual_hid_device_client_;
+  virtual_hid_keyboard_pressed_keys virtual_hid_keyboard_pressed_keys_;
   event_dispatcher_manager event_dispatcher_manager_;
   modifier_flag_manager modifier_flag_manager_;
   pointing_button_manager pointing_button_manager_;
   key_repeat_manager key_repeat_manager_;
-  std::unique_ptr<event_tap_manager> event_tap_manager_;
-
-  std::unique_ptr<virtual_hid_manager_client> virtual_hid_manager_client_;
-  std::mutex virtual_hid_manager_client_mutex_;
 
   system_preferences::values system_preferences_values_;
   std::mutex system_preferences_values_mutex_;
