@@ -5,6 +5,11 @@
 
 Karabiner-VirtualHIDDevice is a virtual HID device driver for macOS.
 
+## System requirements
+
+* OS X 10.11.*
+* OS X 10.12.*
+
 ## How to build
 
 System requirements:
@@ -32,13 +37,14 @@ The `make` script will create a redistributable kext into `dist` directory.
 
 ## Example
 
-An example is in `example/virtual_pointing_example`.
+* `example/virtual_keyboard_example`
+* `example/virtual_pointing_example`
 
 ### Usage
 
 Execute the following instructions in Terminal.
 
-1. Install VirtualHIDManager.kext by `make install` in the top directory.
+1. Install VirtualHIDDevice.kext by `make install` in the top directory.
 2. `cd example/virtual_pointing_example`
 3. `make`
 4. `make run`

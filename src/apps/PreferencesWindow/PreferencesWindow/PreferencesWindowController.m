@@ -2,45 +2,115 @@
 #import "DevicesTableViewController.h"
 #import "FnFunctionKeysTableViewController.h"
 #import "LogFileTextViewController.h"
+#import "NotificationKeys.h"
 #import "SimpleModificationsMenuManager.h"
 #import "SimpleModificationsTableViewController.h"
+#import "SystemPreferencesManager.h"
 #import "UpdaterController.h"
+#import "weakify.h"
 
 @interface PreferencesWindowController ()
 
 @property(weak) IBOutlet DevicesTableViewController* devicesTableViewController;
 @property(weak) IBOutlet FnFunctionKeysTableViewController* fnFunctionKeysTableViewController;
 @property(weak) IBOutlet LogFileTextViewController* logFileTextViewController;
-@property(weak) IBOutlet NSTableView* simpleModificationsTableView;
-@property(weak) IBOutlet NSTableView* fnFunctionKeysTableView;
+@property(weak) IBOutlet NSButton* keyboardFnStateButton;
+@property(weak) IBOutlet NSStepper* initialKeyRepeatStepper;
+@property(weak) IBOutlet NSStepper* keyRepeatStepper;
 @property(weak) IBOutlet NSTableView* devicesTableView;
+@property(weak) IBOutlet NSTableView* devicesExternalKeyboardTableView;
+@property(weak) IBOutlet NSTableView* fnFunctionKeysTableView;
+@property(weak) IBOutlet NSTableView* simpleModificationsTableView;
+@property(weak) IBOutlet NSTextField* initialKeyRepeatTextField;
+@property(weak) IBOutlet NSTextField* keyRepeatTextField;
 @property(weak) IBOutlet NSTextField* versionLabel;
 @property(weak) IBOutlet SimpleModificationsMenuManager* simpleModificationsMenuManager;
 @property(weak) IBOutlet SimpleModificationsTableViewController* simpleModificationsTableViewController;
+@property(weak) IBOutlet SystemPreferencesManager* systemPreferencesManager;
 
 @end
 
 @implementation PreferencesWindowController
 
 - (void)setup {
+  // ----------------------------------------
+  // Setup
+
   [self.simpleModificationsMenuManager setup];
   [self.simpleModificationsTableViewController setup];
   [self.fnFunctionKeysTableViewController setup];
   [self.devicesTableViewController setup];
+  [self.logFileTextViewController monitor];
+
+  @weakify(self);
+  [[NSNotificationCenter defaultCenter] addObserverForName:kSystemPreferencesValuesAreUpdated
+                                                    object:nil
+                                                     queue:[NSOperationQueue mainQueue]
+                                                usingBlock:^(NSNotification* note) {
+                                                  @strongify(self);
+                                                  if (!self) return;
+
+                                                  [self updateSystemPreferencesUIValues];
+                                                }];
+
+  // ----------------------------------------
+  // Update UI values
 
   self.versionLabel.stringValue = [[NSBundle mainBundle] infoDictionary][@"CFBundleVersion"];
 
   [self.simpleModificationsTableView reloadData];
   [self.fnFunctionKeysTableView reloadData];
   [self.devicesTableView reloadData];
-  [self.logFileTextViewController monitor];
+  [self.devicesExternalKeyboardTableView reloadData];
 
+  [self updateSystemPreferencesUIValues];
+
+  // ----------------------------------------
   [self launchctlConsoleUserServer:YES];
+}
+
+- (void)dealloc {
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)show {
   [self.window makeKeyAndOrderFront:self];
   [NSApp activateIgnoringOtherApps:YES];
+}
+
+- (void)updateSystemPreferencesUIValues {
+  self.keyboardFnStateButton.state = self.systemPreferencesManager.systemPreferencesModel.keyboardFnState ? NSOnState : NSOffState;
+
+  uint32_t initialKeyRepeatMilliseconds = self.systemPreferencesManager.systemPreferencesModel.initialKeyRepeatMilliseconds;
+  self.initialKeyRepeatTextField.stringValue = [NSString stringWithFormat:@"%d", initialKeyRepeatMilliseconds];
+  self.initialKeyRepeatStepper.integerValue = initialKeyRepeatMilliseconds;
+
+  uint32_t keyRepeatMilliseconds = self.systemPreferencesManager.systemPreferencesModel.keyRepeatMilliseconds;
+  self.keyRepeatTextField.stringValue = [NSString stringWithFormat:@"%d", keyRepeatMilliseconds];
+  self.keyRepeatStepper.integerValue = keyRepeatMilliseconds;
+}
+
+- (IBAction)updateSystemPreferencesValues:(id)sender {
+  SystemPreferencesModel* model = self.systemPreferencesManager.systemPreferencesModel;
+
+  if (sender == self.keyboardFnStateButton) {
+    model.keyboardFnState = (self.keyboardFnStateButton.state == NSOnState);
+  }
+  if (sender == self.initialKeyRepeatTextField) {
+    model.initialKeyRepeatMilliseconds = [self.initialKeyRepeatTextField.stringValue intValue];
+  }
+  if (sender == self.initialKeyRepeatStepper) {
+    model.initialKeyRepeatMilliseconds = self.initialKeyRepeatStepper.intValue;
+  }
+  if (sender == self.keyRepeatTextField) {
+    model.keyRepeatMilliseconds = [self.keyRepeatTextField.stringValue intValue];
+  }
+  if (sender == self.keyRepeatStepper) {
+    model.keyRepeatMilliseconds = self.keyRepeatStepper.intValue;
+  }
+
+  [self updateSystemPreferencesUIValues];
+  [self.systemPreferencesManager updateSystemPreferencesValues:model];
 }
 
 - (IBAction)checkForUpdatesStableOnly:(id)sender {

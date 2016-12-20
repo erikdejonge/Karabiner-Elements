@@ -24,12 +24,11 @@ mkdir -p "$basedir"
 cp src/scripts/uninstaller.applescript "$basedir"
 cp src/scripts/uninstall.sh "$basedir"
 cp src/scripts/uninstall_core.sh "$basedir/uninstall_core.sh"
-cp -R "src/vendor/Karabiner-VirtualHIDDevice/dist/org.pqrs.driver.VirtualHIDManager.kext" "$basedir"
+cp -R "src/vendor/Karabiner-VirtualHIDDevice/dist" "$basedir/Karabiner-VirtualHIDDevice"
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements/bin"
 mkdir -p "$basedir"
 cp src/core/grabber/build/Release/karabiner_grabber "$basedir"
-cp src/core/event_dispatcher/build/Release/karabiner_event_dispatcher "$basedir"
 cp src/core/console_user_server/build/Release/karabiner_console_user_server "$basedir"
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements/updater"

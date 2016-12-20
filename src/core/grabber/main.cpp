@@ -21,7 +21,7 @@ int main(int argc, const char* argv[]) {
   logger::get_logger().info("version {0}", karabiner_version);
 
   // load kexts
-  system("/sbin/kextload '/Library/Application Support/org.pqrs/Karabiner-Elements/org.pqrs.driver.VirtualHIDManager.kext'");
+  system("/sbin/kextload /Library/Extensions/org.pqrs.driver.Karabiner.VirtualHIDDevice.kext");
 
   // make socket directory.
   mkdir(constants::get_tmp_directory(), 0755);
@@ -29,7 +29,6 @@ int main(int argc, const char* argv[]) {
   chmod(constants::get_tmp_directory(), 0755);
 
   unlink(constants::get_grabber_socket_file_path());
-  unlink(constants::get_event_dispatcher_socket_file_path());
 
   std::unique_ptr<manipulator::event_manipulator> event_manipulator_ptr = std::make_unique<manipulator::event_manipulator>();
   std::unique_ptr<device_grabber> device_grabber_ptr = std::make_unique<device_grabber>(*event_manipulator_ptr);

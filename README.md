@@ -15,7 +15,14 @@ Karabiner-Elements works fine.
 
 You can download the latest Karabiner-Elements from https://pqrs.org/latest/karabiner-elements-latest.dmg
 
-# [Usage](usage/README.md)
+## System requirements
+
+* OS X 10.11.*
+* OS X 10.12.*
+
+# Usage
+
+Detailed usage instructions are available [here](usage/README.md).
 
 ## Features
 
@@ -26,6 +33,7 @@ You can download the latest Karabiner-Elements from https://pqrs.org/latest/kara
 ## Limitations
 
 * Karabiner-Elements cannot modify eject key due to the limitation of macOS API.
+* Karabiner-Elements ignores the `System Preferences > Keyboard > Modifier Keys...` configuration.
 
 ## How to build
 
@@ -36,7 +44,10 @@ System requirements:
 * Command Line Tools for Xcode
 * Boost 1.61.0+ (header-only) http://www.boost.org/
 
-Please install Boost into `/opt/local/include/boost`. (eg. `/opt/local/include/boost/version.hpp`)
+To install the Boost requirement, [download the latest Boost release](http://www.boost.org/), open the `boost` folder inside of it, and move all of the files there into `/opt/local/include/boost/`.
+
+(For example, the version.hpp should be located in `/opt/local/include/boost/version.hpp`)
+
 
 ### Step 1: Getting source code
 

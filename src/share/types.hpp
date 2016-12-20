@@ -2,6 +2,7 @@
 
 #include "boost_defs.hpp"
 
+#include "Karabiner-VirtualHIDDevice/dist/include/karabiner_virtual_hid_device_methods.hpp"
 #include "apple_hid_usage_tables.hpp"
 #include "system_preferences.hpp"
 #include <CoreFoundation/CoreFoundation.h>
@@ -18,7 +19,7 @@
 namespace krbn {
 enum class operation_type : uint8_t {
   none,
-  // event_dispatcher,console_user_server -> grabber
+  // console_user_server -> grabber
   connect,
   // console_user_server -> grabber
   system_preferences_values_updated,
@@ -29,17 +30,9 @@ enum class operation_type : uint8_t {
   clear_devices,
   add_device,
   complete_devices,
-  // event_dispatcher -> grabber
-  set_caps_lock_led_state,
-  // grabber -> event_dispatcher
-  set_caps_lock_state,
-  refresh_caps_lock_led,
-  post_modifier_flags,
-  post_key,
 };
 
 enum class connect_from : uint8_t {
-  event_dispatcher,
   console_user_server,
 };
 
@@ -229,6 +222,7 @@ struct device_identifiers_struct {
 struct device_configuration_struct {
   bool ignore;
   keyboard_type keyboard_type;
+  bool disable_built_in_keyboard_if_exists;
 };
 
 class types final {
@@ -733,6 +727,82 @@ public:
     return it->second;
   }
 
+  static boost::optional<pqrs::karabiner_virtual_hid_device::usage_page> get_usage_page(key_code key_code) {
+    switch (key_code) {
+    case key_code::vk_fn_modifier:
+    case key_code::vk_consumer_illumination_down:
+    case key_code::vk_consumer_illumination_up:
+      return pqrs::karabiner_virtual_hid_device::usage_page::apple_vendor_top_case;
+
+    case key_code::vk_dashboard:
+    case key_code::vk_launchpad:
+    case key_code::vk_mission_control:
+      return pqrs::karabiner_virtual_hid_device::usage_page::apple_vendor_keyboard;
+
+    case key_code::mute:
+    case key_code::volume_up:
+    case key_code::volume_down:
+    case key_code::vk_consumer_brightness_down:
+    case key_code::vk_consumer_brightness_up:
+    case key_code::vk_consumer_next:
+    case key_code::vk_consumer_play:
+    case key_code::vk_consumer_previous:
+      return pqrs::karabiner_virtual_hid_device::usage_page::consumer;
+
+    default:
+      return pqrs::karabiner_virtual_hid_device::usage_page::keyboard_or_keypad;
+    }
+  }
+
+  static boost::optional<pqrs::karabiner_virtual_hid_device::usage> get_usage(key_code key_code) {
+    switch (key_code) {
+    case key_code::vk_fn_modifier:
+      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_keyboard_fn;
+
+    case key_code::vk_consumer_illumination_down:
+      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_illumination_down;
+
+    case key_code::vk_consumer_illumination_up:
+      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_illumination_up;
+
+    case key_code::vk_dashboard:
+      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_dashboard;
+
+    case key_code::vk_launchpad:
+      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_launchpad;
+
+    case key_code::vk_mission_control:
+      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_expose_all;
+
+    case key_code::mute:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_mute;
+
+    case key_code::volume_up:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_increment;
+
+    case key_code::volume_down:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_decrement;
+
+    case key_code::vk_consumer_brightness_down:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_display_brightness_decrement;
+
+    case key_code::vk_consumer_brightness_up:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_display_brightness_increment;
+
+    case key_code::vk_consumer_next:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_fastforward;
+
+    case key_code::vk_consumer_play:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_play_or_pause;
+
+    case key_code::vk_consumer_previous:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_rewind;
+
+    default:
+      return pqrs::karabiner_virtual_hid_device::usage(key_code);
+    }
+  }
+
   static boost::optional<pointing_button> get_pointing_button(uint32_t usage_page, uint32_t usage) {
     if (usage_page == kHIDPage_Button) {
       return krbn::pointing_button(usage);
@@ -802,45 +872,5 @@ struct operation_type_complete_devices_struct {
   operation_type_complete_devices_struct(void) : operation_type(operation_type::complete_devices) {}
 
   const operation_type operation_type;
-};
-
-struct operation_type_set_caps_lock_led_state_struct {
-  operation_type_set_caps_lock_led_state_struct(void) : operation_type(operation_type::set_caps_lock_led_state) {}
-
-  const operation_type operation_type;
-  led_state led_state;
-};
-
-struct operation_type_set_caps_lock_state_struct {
-  operation_type_set_caps_lock_state_struct(void) : operation_type(operation_type::set_caps_lock_state) {}
-
-  const operation_type operation_type;
-  bool state;
-};
-
-struct operation_type_refresh_caps_lock_led_struct {
-  operation_type_refresh_caps_lock_led_struct(void) : operation_type(operation_type::refresh_caps_lock_led) {}
-
-  const operation_type operation_type;
-};
-
-struct operation_type_post_modifier_flags_struct {
-  operation_type_post_modifier_flags_struct(void) : operation_type(operation_type::post_modifier_flags) {}
-
-  const operation_type operation_type;
-  key_code key_code;
-  IOOptionBits flags;
-  keyboard_type keyboard_type;
-};
-
-struct operation_type_post_key_struct {
-  operation_type_post_key_struct(void) : operation_type(operation_type::post_key) {}
-
-  const operation_type operation_type;
-  key_code key_code;
-  event_type event_type;
-  IOOptionBits flags;
-  keyboard_type keyboard_type;
-  bool repeat;
 };
 }
