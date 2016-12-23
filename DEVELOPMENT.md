@@ -2,23 +2,12 @@
 
 * `karabiner_grabber`
   * Run with root privilege.
-  * Seize the input devices and modify events then post events using `karabiner_event_dispatcher`.
-* `karabiner_event_dispatcher`
-  * Launch with root privilege. And then change uid to console user.
-  * Receive key events from `karabiner_grabber` and post them to IOHIDSystem.
+  * Seize the input devices and modify events then post events using `Karabiner-VirtualHIDDevice`.
 * `karabiner_console_user_server`
   * Run with console user privilege.
   * Monitor system preferences values (key repeat, etc) and notify them to `karabiner_grabber`.
   * Monitor a karabiner configuration file and notify changes to `karabiner_grabber`.
   * `karabiner_grabber` seizes devices only when `karabiner_console_user_server` is running.
-
-## About security
-
-`karabiner_grabber` and `karabiner_event_dispatcher` treat very sensitive data (input events from device).
-And they seizes devices even in Secure Keyboard Entry.
-
-They are communicating by using unix domain sockets.
-To avoid the data leaks, the unix domain socket of `karabiner_event_dispatcher` is owned by root user and forbid access from normal privilege users.
 
 ## program sequence
 
@@ -27,16 +16,9 @@ To avoid the data leaks, the unix domain socket of `karabiner_event_dispatcher` 
 `karabiner_grabber`
 
 1. Run `karabiner_grabber`.
-2. `karabiner_grabber` launches `karabiner_event_dispatcher`.
 3. `karabiner_grabber` opens grabber server unix domain socket.
 4. `karabiner_grabber` start polling the session state.
 5. When session state is changed, `karabiner_grabber` changes the unix domain socket owner to console user.
-
-`karabiner_event_dispatcher`
-
-1. `karabiner_event_dispatcher` provides a unix domain socket for `karabiner_grabber`.
-2. `karabiner_event_dispatcher` makes a connection to `karabiner_grabber`.
-3. `karabiner_event_dispatcher` changes their uid to the console user.
 
 ### device grabbing
 
@@ -74,17 +56,15 @@ Thus, `karabiner_grabber` uses this method to modify mouse events.
 
 # The difference of event posting methods
 
+## IOKit call IOHIKeyboard::dispatchKeyboardEvent in kext
+
+It requires posting HID usage page and usage.
+`karabiner_grabber` uses this method by using `Karabiner-VirtualHIDDevice`.
+
 ## IOKit device report in kext
 
 It requires posting HID events.<br />
 The IOHIKeyboard processes the reports by passing reports to `handleReport`.
-
-However, this method is not enough polite.
-Calling the `handleReport` method directly causes a problem that OS X ignores `EnableSecureEventInput`.
-(The normal privillege EventTap can observe all events even in Secure Keyboard Entry.)
-So we cannot use this method to common keys for security reason.
-
-We use the virtual keyboard for modifier flags to use changed modifier keys in accessibility functions such as zoom by control+scroll wheel and sticky keys.
 
 ## IOHIDPostEvent
 
@@ -92,15 +72,6 @@ It requires posting coregraphics events.<br />
 
 `IOHIDPostEvent` will be failed if the process is not running in the current session user.
 (The root user is also forbidden.)
-
-`karabiner_event_dispatcher` uses this method.
-
-### Note
-
-There is a limitation that the mouse events will ignore modifier flags by IOHIDPostEvent.
-For example, even if we pressed the command key (and the NX_COMMANDMASK is sent by IOHIDPostEvent),
-the mouse click event will be treated as click without any modifier flags. (not command+click)
-`karabiner_grabber` uses `handleReport` to send modifier flag events, so we don't need to care this limitation.
 
 ## CGEventPost
 
@@ -117,11 +88,6 @@ Thus, `karabiner_grabber` does not use `CGEventPost`.
 ## IOKit device value in kext
 
 It requires posting HID events.<br />
-We have to make a complete set of virtual devices to post the IOHIDValue.
-
-## IOKit call IOHIKeyboard::dispatchKeyboardEvent in kext
-
-It requires posting coregraphics events.<br />
 We have to make a complete set of virtual devices to post the IOHIDValue.
 
 --------------------------------------------------------------------------------
@@ -179,7 +145,7 @@ uint8_t keys[6];
 #### Apple HID keyboard report descriptor
 
 ```
-uint8_t unknown;
+uint8_t record_id;
 uint8_t modifiers;
 uint8_t reserved;
 uint8_t keys[6];

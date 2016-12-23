@@ -11,14 +11,12 @@ public:
   libkrbn_log_monitor_class(libkrbn_log_monitor_callback callback, void* refcon) : callback_(callback), refcon_(refcon) {
     std::vector<std::string> targets = {
         "/var/log/karabiner/grabber_log",
-        "/var/log/karabiner/event_dispatcher_log",
     };
     if (auto p = constants::get_home_dot_karabiner_directory()) {
       targets.push_back(std::string(p) + "/log/console_user_server_log");
     }
 
-    log_monitor_ = std::make_unique<log_monitor>(libkrbn::get_logger(),
-                                                 targets,
+    log_monitor_ = std::make_unique<log_monitor>(targets,
                                                  std::bind(&libkrbn_log_monitor_class::cpp_callback, this, std::placeholders::_1));
   }
 
