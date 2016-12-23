@@ -1,1 +1,0 @@
-/Users/rabshakeh/workspace/git_utils/merge.sh
