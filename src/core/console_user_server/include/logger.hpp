@@ -7,17 +7,15 @@
 #include <spdlog/spdlog.h>
 #include <string>
 
+namespace krbn {
 class logger final {
 public:
   static spdlog::logger& get_logger(void) {
     static std::shared_ptr<spdlog::logger> logger;
     if (!logger) {
-      if (auto p = constants::get_home_dot_karabiner_directory()) {
-        std::string log_directory = p;
-        mkdir(log_directory.c_str(), 0700);
-
-        log_directory += "/log/";
-        mkdir(log_directory.c_str(), 0700);
+      auto log_directory = constants::get_user_log_directory();
+      if (!log_directory.empty()) {
+        filesystem::create_directory_with_intermediate_directories(log_directory, 0700);
 
         if (filesystem::is_directory(log_directory)) {
           std::string log_file_path = log_directory + "/console_user_server_log";
@@ -35,3 +33,4 @@ public:
     return *logger;
   }
 };
+}

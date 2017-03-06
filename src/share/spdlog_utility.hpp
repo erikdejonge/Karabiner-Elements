@@ -4,9 +4,11 @@
 
 #include <boost/lexical_cast.hpp>
 #include <boost/optional.hpp>
+#include <deque>
 #include <iomanip>
 #include <spdlog/spdlog.h>
 
+namespace krbn {
 class spdlog_utility final {
 public:
   static std::string get_pattern(void) {
@@ -88,35 +90,56 @@ public:
   public:
     log_reducer(const log_reducer&) = delete;
 
-    log_reducer(spdlog::logger& logger) : logger_(logger), time_(0) {}
+    log_reducer(spdlog::logger& logger) : logger_(logger) {}
+
+    void reset(void) {
+      messages_.clear();
+    }
 
     void info(const std::string& message) {
-      auto t = time(nullptr);
-      if (time_ != t) {
-        time_ = t;
-        logger_.info(message);
+      if (is_ignore(spdlog::level::info, message)) {
+        return;
       }
+
+      logger_.info(message);
     }
 
     void warn(const std::string& message) {
-      auto t = time(nullptr);
-      if (time_ != t) {
-        time_ = t;
-        logger_.warn(message);
+      if (is_ignore(spdlog::level::warn, message)) {
+        return;
       }
+
+      logger_.warn(message);
     }
 
     void error(const std::string& message) {
-      auto t = time(nullptr);
-      if (time_ != t) {
-        time_ = t;
-        logger_.error(message);
+      if (is_ignore(spdlog::level::err, message)) {
+        return;
       }
+
+      logger_.error(message);
     }
 
   private:
+    bool is_ignore(spdlog::level::level_enum level, const std::string& message) {
+      for (const auto& it : messages_) {
+        if (it.first == level && it.second == message) {
+          return true;
+        }
+      }
+
+      const size_t max_size = 16;
+      messages_.push_back(std::make_pair(level, message));
+      while (messages_.size() > max_size) {
+        messages_.pop_front();
+      }
+
+      return false;
+    }
+
     spdlog::logger& logger_;
 
-    time_t time_;
+    std::deque<std::pair<spdlog::level::level_enum, std::string>> messages_;
   };
 };
+}

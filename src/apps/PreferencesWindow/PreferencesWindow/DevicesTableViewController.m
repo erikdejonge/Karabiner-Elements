@@ -1,12 +1,10 @@
 #import "DevicesTableViewController.h"
-#import "ConfigurationManager.h"
-#import "CoreConfigurationModel.h"
 #import "DevicesTableCellView.h"
+#import "KarabinerKit/KarabinerKit.h"
 #import "NotificationKeys.h"
 
 @interface DevicesTableViewController ()
 
-@property(weak) IBOutlet ConfigurationManager* configurationManager;
 @property(weak) IBOutlet NSTableView* tableView;
 @property(weak) IBOutlet NSTableView* externalKeyboardTableView;
 
@@ -15,7 +13,7 @@
 @implementation DevicesTableViewController
 
 - (void)setup {
-  [[NSNotificationCenter defaultCenter] addObserverForName:kConfigurationIsLoaded
+  [[NSNotificationCenter defaultCenter] addObserverForName:kKarabinerKitConfigurationIsLoaded
                                                     object:nil
                                                      queue:[NSOperationQueue mainQueue]
                                                 usingBlock:^(NSNotification* note) {
@@ -23,7 +21,15 @@
                                                   [self.externalKeyboardTableView reloadData];
                                                 }];
 
-  [[NSNotificationCenter defaultCenter] addObserverForName:kDevicesAreUpdated
+  [[NSNotificationCenter defaultCenter] addObserverForName:kKarabinerKitDevicesAreUpdated
+                                                    object:nil
+                                                     queue:[NSOperationQueue mainQueue]
+                                                usingBlock:^(NSNotification* note) {
+                                                  [self.tableView reloadData];
+                                                  [self.externalKeyboardTableView reloadData];
+                                                }];
+
+  [[NSNotificationCenter defaultCenter] addObserverForName:kSelectedProfileChanged
                                                     object:nil
                                                      queue:[NSOperationQueue mainQueue]
                                                 usingBlock:^(NSNotification* note) {
@@ -37,22 +43,31 @@
 }
 
 - (void)valueChanged:(id)sender {
+  KarabinerKitCoreConfigurationModel* coreConfigurationModel = [KarabinerKitConfigurationManager sharedManager].coreConfigurationModel;
+
   NSInteger row = [self.tableView rowForView:sender];
-  if (row == -1) {
-    row = [self.externalKeyboardTableView rowForView:sender];
-  }
-  if (row == -1) {
-    NSLog(@"rowForView error @ [DevicesTableViewController valueChanged]");
+  if (row != -1) {
+    DevicesTableCellView* cellView = [self.tableView viewAtColumn:0 row:row makeIfNecessary:NO];
+    [coreConfigurationModel setSelectedProfileDeviceIgnore:cellView.deviceIdentifiers.vendorId
+                                                 productId:cellView.deviceIdentifiers.productId
+                                                isKeyboard:cellView.deviceIdentifiers.isKeyboard
+                                          isPointingDevice:cellView.deviceIdentifiers.isPointingDevice
+                                                     value:(cellView.checkbox.state == NSOffState)];
+    [coreConfigurationModel save];
     return;
   }
-  DevicesTableCellView* cellViewCheckbox = [self.tableView viewAtColumn:0 row:row makeIfNecessary:NO];
-  DevicesTableCellView* cellViewPopUp = [self.tableView viewAtColumn:1 row:row makeIfNecessary:NO];
-  DevicesTableCellView* cellViewExternalKeyboard = [self.externalKeyboardTableView viewAtColumn:0 row:row makeIfNecessary:NO];
-  [self.configurationManager.configurationCoreModel setDeviceConfiguration:cellViewCheckbox.deviceIdentifiers
-                                                                    ignore:(cellViewCheckbox.checkbox.state != NSOnState)
-                                                              keyboardType:[cellViewPopUp.popUpButton.selectedItem.representedObject unsignedIntValue]
-                                            disableBuiltInKeyboardIfExists:(cellViewExternalKeyboard.checkbox.state == NSOnState)];
-  [self.configurationManager save];
+
+  row = [self.externalKeyboardTableView rowForView:sender];
+  if (row != -1) {
+    DevicesTableCellView* cellView = [self.externalKeyboardTableView viewAtColumn:0 row:row makeIfNecessary:NO];
+    [coreConfigurationModel setSelectedProfileDeviceDisableBuiltInKeyboardIfExists:cellView.deviceIdentifiers.vendorId
+                                                                         productId:cellView.deviceIdentifiers.productId
+                                                                        isKeyboard:cellView.deviceIdentifiers.isKeyboard
+                                                                  isPointingDevice:cellView.deviceIdentifiers.isPointingDevice
+                                                                             value:(cellView.checkbox.state == NSOnState)];
+    [coreConfigurationModel save];
+    return;
+  }
 }
 
 @end

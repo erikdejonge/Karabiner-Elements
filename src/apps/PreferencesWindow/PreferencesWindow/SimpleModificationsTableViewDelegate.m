@@ -1,12 +1,11 @@
 #import "SimpleModificationsTableViewDelegate.h"
-#import "ConfigurationManager.h"
+#import "KarabinerKit/KarabinerKit.h"
 #import "SimpleModificationsMenuManager.h"
 #import "SimpleModificationsTableCellView.h"
 #import "SimpleModificationsTableViewController.h"
 
 @interface SimpleModificationsTableViewDelegate ()
 
-@property(weak) IBOutlet ConfigurationManager* configurationManager;
 @property(weak) IBOutlet SimpleModificationsMenuManager* simpleModificationsMenuManager;
 @property(weak) IBOutlet SimpleModificationsTableViewController* simpleModificationsTableViewController;
 
@@ -18,15 +17,14 @@
   if ([tableColumn.identifier isEqualToString:@"SimpleModificationsFromColumn"]) {
     SimpleModificationsTableCellView* result = [tableView makeViewWithIdentifier:@"SimpleModificationsFromCellView" owner:self];
 
-    NSArray<NSDictionary*>* simpleModifications = self.configurationManager.configurationCoreModel.simpleModifications;
-    if (0 <= row && row < (NSInteger)(simpleModifications.count)) {
-      result.popUpButton.action = @selector(valueChanged:);
-      result.popUpButton.target = self.simpleModificationsTableViewController;
-      result.popUpButton.menu = [self.simpleModificationsMenuManager.fromMenu copy];
+    KarabinerKitCoreConfigurationModel* coreConfigurationModel = [KarabinerKitConfigurationManager sharedManager].coreConfigurationModel;
 
-      NSString* fromValue = simpleModifications[row][@"from"];
-      [SimpleModificationsTableViewController selectPopUpButtonMenu:result.popUpButton representedObject:fromValue];
-    }
+    result.popUpButton.action = @selector(valueChanged:);
+    result.popUpButton.target = self.simpleModificationsTableViewController;
+    result.popUpButton.menu = [self.simpleModificationsMenuManager.fromMenu copy];
+
+    NSString* fromValue = [coreConfigurationModel selectedProfileSimpleModificationFirstAtIndex:row];
+    [SimpleModificationsTableViewController selectPopUpButtonMenu:result.popUpButton representedObject:fromValue];
 
     return result;
   }
@@ -34,22 +32,20 @@
   if ([tableColumn.identifier isEqualToString:@"SimpleModificationsToColumn"]) {
     SimpleModificationsTableCellView* result = [tableView makeViewWithIdentifier:@"SimpleModificationsToCellView" owner:self];
 
-    NSArray<NSDictionary*>* simpleModifications = self.configurationManager.configurationCoreModel.simpleModifications;
-    if (0 <= row && row < (NSInteger)(simpleModifications.count)) {
-      result.popUpButton.action = @selector(valueChanged:);
-      result.popUpButton.target = self.simpleModificationsTableViewController;
-      result.popUpButton.menu = [self.simpleModificationsMenuManager.toMenu copy];
+    result.popUpButton.action = @selector(valueChanged:);
+    result.popUpButton.target = self.simpleModificationsTableViewController;
+    result.popUpButton.menu = [self.simpleModificationsMenuManager.toMenu copy];
 
-      NSString* fromValue = simpleModifications[row][@"from"];
-      if (!fromValue || [fromValue isEqualToString:@""]) {
-        result.popUpButton.enabled = NO;
-      } else {
-        result.popUpButton.enabled = YES;
-      }
-
-      NSString* toValue = simpleModifications[row][@"to"];
-      [SimpleModificationsTableViewController selectPopUpButtonMenu:result.popUpButton representedObject:toValue];
+    KarabinerKitCoreConfigurationModel* coreConfigurationModel = [KarabinerKitConfigurationManager sharedManager].coreConfigurationModel;
+    NSString* fromValue = [coreConfigurationModel selectedProfileSimpleModificationFirstAtIndex:row];
+    if ([fromValue length] > 0) {
+      result.popUpButton.enabled = YES;
+    } else {
+      result.popUpButton.enabled = NO;
     }
+
+    NSString* toValue = [coreConfigurationModel selectedProfileSimpleModificationSecondAtIndex:row];
+    [SimpleModificationsTableViewController selectPopUpButtonMenu:result.popUpButton representedObject:toValue];
 
     return result;
   }

@@ -7,6 +7,7 @@
 #include <boost/optional.hpp>
 #include <spdlog/spdlog.h>
 
+namespace krbn {
 class system_preferences_monitor final {
 public:
   typedef std::function<void(const system_preferences::values& values)> values_updated_callback;
@@ -15,7 +16,6 @@ public:
                              const values_updated_callback& callback) : logger_(logger),
                                                                         callback_(callback) {
     timer_ = std::make_unique<gcd_utility::main_queue_timer>(
-        0,
         dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC),
         1.0 * NSEC_PER_SEC,
         0,
@@ -44,3 +44,4 @@ private:
 
   boost::optional<system_preferences::values> values_;
 };
+}

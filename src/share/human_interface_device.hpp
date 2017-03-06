@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <vector>
 
+namespace krbn {
 class human_interface_device final {
 public:
   enum class grabbable_state {
@@ -63,7 +64,6 @@ public:
                                                            grabbed_(false),
                                                            disabled_(false),
                                                            is_built_in_keyboard_(false),
-                                                           keyboard_type_(krbn::keyboard_type::none),
                                                            disable_built_in_keyboard_if_exists_(false) {
     // ----------------------------------------
     // retain device_
@@ -275,8 +275,9 @@ public:
 
       cancel_grab_timer();
 
+      is_grabbable_log_reducer_.reset();
+
       grab_timer_ = std::make_unique<gcd_utility::main_queue_timer>(
-          0,
           // We have to set an initial wait since OS X will lost the device if we called IOHIDDeviceOpen(kIOHIDOptionsTypeSeizeDevice) in device_matching_callback.
           // (The device will be unusable after karabiner_grabber is quitted if we don't wait here.)
           dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
@@ -389,15 +390,15 @@ public:
     return iokit_utility::get_max_input_report_size(device_);
   }
 
-  boost::optional<krbn::vendor_id> get_vendor_id(void) const {
+  boost::optional<vendor_id> get_vendor_id(void) const {
     return iokit_utility::get_vendor_id(device_);
   }
 
-  boost::optional<krbn::product_id> get_product_id(void) const {
+  boost::optional<product_id> get_product_id(void) const {
     return iokit_utility::get_product_id(device_);
   }
 
-  boost::optional<krbn::location_id> get_location_id(void) const {
+  boost::optional<location_id> get_location_id(void) const {
     return iokit_utility::get_location_id(device_);
   }
 
@@ -483,6 +484,16 @@ public:
   }
 
   grabbable_state is_grabbable(void) {
+    if (is_grabbable_callback_) {
+      auto state = is_grabbable_callback_(*this);
+      if (state != grabbable_state::grabbable) {
+        return state;
+      }
+    }
+
+    // ----------------------------------------
+    // We are going to grab the device.
+
     if (repeating_key_) {
       // We should not grab the device while a key is repeating since we cannot stop the key repeating.
       // (To stop the key repeating, we have to send a hid report to the device. But we cannot do it.)
@@ -499,13 +510,7 @@ public:
       return grabbable_state::ungrabbable_temporarily;
     }
 
-    if (is_grabbable_callback_) {
-      auto state = is_grabbable_callback_(*this);
-      if (state != grabbable_state::grabbable) {
-        return state;
-      }
-    }
-
+    // ----------------------------------------
     return grabbable_state::grabbable;
   }
 
@@ -520,8 +525,8 @@ public:
 #pragma mark - usage specific utilities
 
   // This method requires root privilege to use IOHIDDeviceGetValue for kHIDPage_LEDs usage.
-  boost::optional<krbn::led_state> get_caps_lock_led_state(void) const {
-    boost::optional<krbn::led_state> __block state = boost::none;
+  boost::optional<led_state> get_caps_lock_led_state(void) const {
+    boost::optional<led_state> __block state = boost::none;
 
     gcd_utility::dispatch_sync_in_main_queue(^{
       if (auto element = get_element(kHIDPage_LEDs, kHIDUsage_LED_CapsLock)) {
@@ -534,9 +539,9 @@ public:
         } else {
           auto integer_value = IOHIDValueGetIntegerValue(value);
           if (integer_value == max) {
-            state = krbn::led_state::on;
+            state = led_state::on;
           } else {
-            state = krbn::led_state::off;
+            state = led_state::off;
           }
         }
       }
@@ -546,13 +551,24 @@ public:
   }
 
   // This method requires root privilege to use IOHIDDeviceSetValue for kHIDPage_LEDs usage.
-  IOReturn set_caps_lock_led_state(krbn::led_state state) {
+  IOReturn set_caps_lock_led_state(led_state state) {
+    // `IOHIDDeviceSetValue` will block forever with some buggy devices. (eg. Bit Touch)
+    // This, we use a blacklist.
+    if (auto v = get_vendor_id()) {
+      if (auto p = get_product_id()) {
+        if ((*v == vendor_id(0x22ea) && *p == product_id(0xf)) /* Bit Touch (Bit Trade One LTD.) */ ||
+            false) {
+          return kIOReturnSuccess;
+        }
+      }
+    }
+
     IOReturn __block r = kIOReturnError;
 
     gcd_utility::dispatch_sync_in_main_queue(^{
       if (auto element = get_element(kHIDPage_LEDs, kHIDUsage_LED_CapsLock)) {
         CFIndex integer_value = 0;
-        if (state == krbn::led_state::on) {
+        if (state == led_state::on) {
           integer_value = IOHIDElementGetLogicalMax(element);
         } else {
           integer_value = IOHIDElementGetLogicalMin(element);
@@ -560,7 +576,13 @@ public:
 
         if (auto value = IOHIDValueCreateWithIntegerValue(kCFAllocatorDefault, element, mach_absolute_time(), integer_value)) {
           r = IOHIDDeviceSetValue(device_, element, value);
+
+          if (r != kIOReturnSuccess) {
+            logger_.error("IOHIDDeviceSetValue error {1} for {2} @ {0}", __PRETTY_FUNCTION__, r, get_name_for_log());
+          }
+
           CFRelease(value);
+
         } else {
           logger_.error("IOHIDValueCreateWithIntegerValue error @ {0}", __PRETTY_FUNCTION__);
         }
@@ -568,20 +590,6 @@ public:
     });
 
     return r;
-  }
-
-  krbn::keyboard_type get_keyboard_type(void) const {
-    krbn::keyboard_type __block value;
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      value = keyboard_type_;
-    });
-    return value;
-  }
-
-  void set_keyboard_type(krbn::keyboard_type keyboard_type) {
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      keyboard_type_ = keyboard_type;
-    });
   }
 
   bool get_disable_built_in_keyboard_if_exists(void) const {
@@ -632,21 +640,128 @@ private:
       return;
     }
 
-    auto queue = static_cast<IOHIDQueueRef>(sender);
-    if (!queue) {
-      return;
-    }
-
-    self->queue_value_available_callback(queue);
+    self->queue_value_available_callback();
   }
 
-  void queue_value_available_callback(IOHIDQueueRef _Nonnull queue) {
+  void queue_value_available_callback(void) {
+    // We have to separate modifier flags queue and generic queue.
+    //
+    // Some devices are send modifier flag and key at the same report.
+    // For example, a key sends control+up-arrow by this reports.
+    //
+    //   modifiers: 0x0
+    //   keys: 0x0 0x0 0x0 0x0 0x0 0x0
+    //
+    //   modifiers: 0x1
+    //   keys: 0x52 0x0 0x0 0x0 0x0 0x0
+    //
+    // In this case, macOS does not guarantee the value event order to be modifier first.
+    // At least macOS 10.12 or prior sends the up-arrow event first.
+    //
+    //   ----------------------------------------
+    //   Example of hid value events in a single queue at control+up-arrow
+    //
+    //   1. up-arrow keydown
+    //     usage_page:0x7
+    //     usage:0x4f
+    //     integer_value:1
+    //
+    //   2. control keydown
+    //     usage_page:0x7
+    //     usage:0xe1
+    //     integer_value:1
+    //
+    //   3. up-arrow keyup
+    //     usage_page:0x7
+    //     usage:0x4f
+    //     integer_value:0
+    //
+    //   4. control keyup
+    //     usage_page:0x7
+    //     usage:0xe1
+    //     integer_value:0
+    //   ----------------------------------------
+    //
+    // These events will not be interpreted as intended in this order.
+    // Thus, we have to reorder the events.
+
+    std::vector<IOHIDValueRef> retained_values;
+
+    // ----------------------------------------
+    // Drain all values in queue at first.
+
     while (true) {
-      auto value = IOHIDQueueCopyNextValueWithTimeout(queue, 0.);
+      auto value = IOHIDQueueCopyNextValueWithTimeout(queue_, 0.);
       if (!value) {
         break;
       }
 
+      retained_values.push_back(value);
+    }
+
+    // ----------------------------------------
+    // Sort values
+
+    std::sort(retained_values.begin(), retained_values.end(), [](const IOHIDValueRef& v1, const IOHIDValueRef& v2) {
+      auto t1 = IOHIDValueGetTimeStamp(v1);
+      auto t2 = IOHIDValueGetTimeStamp(v2);
+
+      if (t1 == t2) {
+        auto e1 = IOHIDValueGetElement(v1);
+        auto e2 = IOHIDValueGetElement(v2);
+
+        if (e1 && e2) {
+          auto modifier_flag1 = modifier_flag::zero;
+          auto modifier_flag2 = modifier_flag::zero;
+
+          auto usage_page1 = IOHIDElementGetUsagePage(e1);
+          auto usage1 = IOHIDElementGetUsage(e1);
+          auto usage_page2 = IOHIDElementGetUsagePage(e2);
+          auto usage2 = IOHIDElementGetUsage(e2);
+
+          if (auto key_code1 = types::get_key_code(usage_page1, usage1)) {
+            modifier_flag1 = types::get_modifier_flag(*key_code1);
+          }
+          if (auto key_code2 = types::get_key_code(usage_page2, usage2)) {
+            modifier_flag2 = types::get_modifier_flag(*key_code2);
+          }
+
+          // If either modifier_flag1 or modifier_flag2 is modifier, reorder it before.
+
+          if (modifier_flag1 == modifier_flag::zero &&
+              modifier_flag2 != modifier_flag::zero) {
+            // v2 is modifier_flag
+            auto integer_value2 = IOHIDValueGetIntegerValue(v2);
+            if (integer_value2) {
+              // reorder to v2,v1 if v2 is pressed.
+              return false;
+            } else {
+              return true;
+            }
+          }
+
+          if (modifier_flag1 != modifier_flag::zero &&
+              modifier_flag2 == modifier_flag::zero) {
+            // v1 is modifier_flag
+            auto integer_value1 = IOHIDValueGetIntegerValue(v1);
+            if (integer_value1) {
+              return true;
+            } else {
+              // reorder to v2,v1 if v1 is released.
+              return false;
+            }
+          }
+        }
+      }
+
+      // keep order
+      return t1 <= t2;
+    });
+
+    // ----------------------------------------
+    // Then process the callback.
+
+    for (const auto& value : retained_values) {
       auto element = IOHIDValueGetElement(value);
       if (element) {
         auto usage_page = IOHIDElementGetUsagePage(element);
@@ -654,10 +769,10 @@ private:
         auto integer_value = IOHIDValueGetIntegerValue(value);
 
         // Update repeating_key_
-        if (auto key_code = krbn::types::get_key_code(usage_page, usage)) {
+        if (auto key_code = types::get_key_code(usage_page, usage)) {
           bool pressed = integer_value;
           if (pressed) {
-            if (krbn::types::get_modifier_flag(*key_code) != krbn::modifier_flag::zero) {
+            if (types::get_modifier_flag(*key_code) != modifier_flag::zero) {
               // The pressed key is a modifier key.
               repeating_key_ = boost::none;
             } else {
@@ -671,7 +786,7 @@ private:
         }
 
         // Update pressed_buttons_
-        if (auto pointing_button = krbn::types::get_pointing_button(usage_page, usage)) {
+        if (auto pointing_button = types::get_pointing_button(usage_page, usage)) {
           bool pressed = integer_value;
           if (pressed) {
             pressed_buttons_.push_back(*pointing_button);
@@ -698,7 +813,12 @@ private:
           value_callback_(*this, value, element, usage_page, usage, integer_value);
         }
       }
+    }
 
+    // ----------------------------------------
+    // Release retained values
+
+    for (const auto& value : retained_values) {
       CFRelease(value);
     }
   }
@@ -765,8 +885,8 @@ private:
   IOHIDQueueRef _Nullable queue_;
   std::unordered_map<uint64_t, IOHIDElementRef> elements_;
 
-  boost::optional<krbn::key_code> repeating_key_;
-  std::list<krbn::pointing_button> pressed_buttons_;
+  boost::optional<key_code> repeating_key_;
+  std::list<pointing_button> pressed_buttons_;
   std::list<uint64_t> pressed_key_usages_;
   value_callback value_callback_;
   report_callback report_callback_;
@@ -785,6 +905,6 @@ private:
   bool disabled_;
 
   bool is_built_in_keyboard_;
-  krbn::keyboard_type keyboard_type_;
   bool disable_built_in_keyboard_if_exists_;
 };
+}

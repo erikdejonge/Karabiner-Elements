@@ -26,7 +26,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		340C7F681E424F0E00F9B911 /* process_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = process_utility.hpp; path = ../../share/process_utility.hpp; sourceTree = SOURCE_ROOT; };
 		3411F57C1D84FD9400C4ED1E /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		341424E81E685E5F00DFE6EC /* configuration_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = configuration_monitor.hpp; path = ../../share/configuration_monitor.hpp; sourceTree = SOURCE_ROOT; };
 		341C8E861D4CF1E10018D32C /* local_datagram_server.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = local_datagram_server.hpp; path = ../../share/local_datagram_server.hpp; sourceTree = SOURCE_ROOT; };
 		341F59CA1D5167E900B441A8 /* constants.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = constants.hpp; path = ../../share/constants.hpp; sourceTree = SOURCE_ROOT; };
 		341F59D11D5244F200B441A8 /* local_datagram_client.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = local_datagram_client.hpp; path = ../../share/local_datagram_client.hpp; sourceTree = SOURCE_ROOT; };
@@ -38,8 +40,10 @@
 		34492B881DB12C9A0084F167 /* spdlog_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = spdlog_utility.hpp; path = ../../share/spdlog_utility.hpp; sourceTree = SOURCE_ROOT; };
 		345AC0021D620C8C009D1FB4 /* notification_center.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = notification_center.hpp; path = ../../share/notification_center.hpp; sourceTree = SOURCE_ROOT; };
 		345AC0041D62163F009D1FB4 /* boost_defs.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = boost_defs.hpp; path = ../../share/boost_defs.hpp; sourceTree = SOURCE_ROOT; };
+		3463EABD1E2E866000427A81 /* version_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = version_monitor.hpp; path = ../../share/version_monitor.hpp; sourceTree = SOURCE_ROOT; };
 		3469EB701D814F140005D30D /* filesystem.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = filesystem.hpp; path = ../../share/filesystem.hpp; sourceTree = SOURCE_ROOT; };
 		347113141D871C6C001AC60D /* process_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = process_monitor.hpp; path = ../../share/process_monitor.hpp; sourceTree = SOURCE_ROOT; };
+		3476862C1E22A7A700A7DFAB /* cf_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = cf_utility.hpp; path = ../../share/cf_utility.hpp; sourceTree = SOURCE_ROOT; };
 		348FC00A1D9B76830083F98F /* virtual_hid_device_client.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = virtual_hid_device_client.hpp; path = ../../share/virtual_hid_device_client.hpp; sourceTree = SOURCE_ROOT; };
 		349950681D89A25D004FE466 /* event_manipulator.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = event_manipulator.hpp; path = include/manipulator/event_manipulator.hpp; sourceTree = SOURCE_ROOT; };
 		349950691D89A2EF004FE466 /* system_preferences.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = system_preferences.hpp; path = ../../share/system_preferences.hpp; sourceTree = SOURCE_ROOT; };
@@ -109,6 +113,8 @@
 			children = (
 				34EED7101D6FA38400399AD1 /* apple_hid_usage_tables.hpp */,
 				345AC0041D62163F009D1FB4 /* boost_defs.hpp */,
+				3476862C1E22A7A700A7DFAB /* cf_utility.hpp */,
+				341424E81E685E5F00DFE6EC /* configuration_monitor.hpp */,
 				341F59CA1D5167E900B441A8 /* constants.hpp */,
 				3469EB701D814F140005D30D /* filesystem.hpp */,
 				3431346E1DB70C900008F284 /* gcd_utility.hpp */,
@@ -120,12 +126,14 @@
 				341C8E861D4CF1E10018D32C /* local_datagram_server.hpp */,
 				345AC0021D620C8C009D1FB4 /* notification_center.hpp */,
 				347113141D871C6C001AC60D /* process_monitor.hpp */,
+				340C7F681E424F0E00F9B911 /* process_utility.hpp */,
 				34DA28A31D8FC8BE0029E37D /* service_observer.hpp */,
 				34A88A8F1D6840C200DD480B /* session.hpp */,
 				34492B881DB12C9A0084F167 /* spdlog_utility.hpp */,
 				349950691D89A2EF004FE466 /* system_preferences.hpp */,
 				343134701DB71BEC0008F284 /* thread_utility.hpp */,
 				34A88AA61D6DF89900DD480B /* types.hpp */,
+				3463EABD1E2E866000427A81 /* version_monitor.hpp */,
 				348FC00A1D9B76830083F98F /* virtual_hid_device_client.hpp */,
 			);
 			name = share;
@@ -257,7 +265,6 @@
 				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
-				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
 				GCC_WARN_MISSING_PARENTHESES = YES;

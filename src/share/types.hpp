@@ -4,6 +4,7 @@
 
 #include "Karabiner-VirtualHIDDevice/dist/include/karabiner_virtual_hid_device_methods.hpp"
 #include "apple_hid_usage_tables.hpp"
+#include "constants.hpp"
 #include "system_preferences.hpp"
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
@@ -11,6 +12,7 @@
 #include <IOKit/hidsystem/IOHIDShared.h>
 #include <IOKit/hidsystem/ev_keymap.h>
 #include <boost/optional.hpp>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -21,19 +23,7 @@ enum class operation_type : uint8_t {
   none,
   // console_user_server -> grabber
   connect,
-  // console_user_server -> grabber
   system_preferences_values_updated,
-  clear_simple_modifications,
-  add_simple_modification,
-  clear_fn_function_keys,
-  add_fn_function_key,
-  clear_devices,
-  add_device,
-  complete_devices,
-};
-
-enum class connect_from : uint8_t {
-  console_user_server,
 };
 
 enum class event_type : uint32_t {
@@ -42,7 +32,7 @@ enum class event_type : uint32_t {
 };
 
 enum class key_code : uint32_t {
-  // 0x00 - 0xff are usage pages
+  // 0x00 - 0xff are keys in keyboard_or_keypad usage page.
   return_or_enter = kHIDUsage_KeyboardReturnOrEnter,
   delete_or_backspace = kHIDUsage_KeyboardDeleteOrBackspace,
   caps_lock = kHIDUsage_KeyboardCapsLock,
@@ -103,26 +93,31 @@ enum class key_code : uint32_t {
   page_down = kHIDUsage_KeyboardPageDown,
 
   mute = kHIDUsage_KeyboardMute,
-  volume_up = kHIDUsage_KeyboardVolumeUp,
-  volume_down = kHIDUsage_KeyboardVolumeDown,
+  volume_decrement = kHIDUsage_KeyboardVolumeDown,
+  volume_increment = kHIDUsage_KeyboardVolumeUp,
 
-  // 0x1000 - are karabiner own virtual key codes
+  // 0x1000 - are karabiner own virtual key codes or keys not in keyboard_or_keypad usage page.
   extra_ = 0x1000,
-  // predefined virtual modifier flags
+  // A pseudo key that does not send any event.
   vk_none,
-  vk_fn_modifier,
 
-  // virtual key codes
-  vk_consumer_brightness_down,
-  vk_consumer_brightness_up,
-  vk_consumer_illumination_down,
-  vk_consumer_illumination_up,
-  vk_consumer_next,
-  vk_consumer_play,
-  vk_consumer_previous,
-  vk_dashboard,
-  vk_launchpad,
-  vk_mission_control,
+  // Keys that are not in generic keyboard_or_keypad usage_page.
+  fn,
+  display_brightness_decrement,
+  display_brightness_increment,
+  dashboard,
+  launchpad,
+  mission_control,
+  illumination_decrement,
+  illumination_increment,
+  rewind,
+  play_or_pause,
+  fastforward,
+  eject,
+  apple_display_brightness_decrement,
+  apple_display_brightness_increment,
+  apple_top_case_display_brightness_decrement,
+  apple_top_case_display_brightness_increment,
 };
 
 enum class pointing_button : uint32_t {
@@ -205,26 +200,6 @@ enum class product_id : uint32_t {
 enum class location_id : uint32_t {
 };
 
-enum class keyboard_type : uint32_t {
-  none = 0,
-  ansi = 40,
-  iso = 41,
-  jis = 42,
-};
-
-struct device_identifiers_struct {
-  vendor_id vendor_id;
-  product_id product_id;
-  bool is_keyboard;
-  bool is_pointing_device;
-};
-
-struct device_configuration_struct {
-  bool ignore;
-  keyboard_type keyboard_type;
-  bool disable_built_in_keyboard_if_exists;
-};
-
 class types final {
 public:
   static modifier_flag get_modifier_flag(key_code key_code) {
@@ -245,7 +220,7 @@ public:
       return modifier_flag::right_option;
     case kHIDUsage_KeyboardRightGUI:
       return modifier_flag::right_command;
-    case static_cast<uint32_t>(key_code::vk_fn_modifier):
+    case static_cast<uint32_t>(key_code::fn):
       return modifier_flag::fn;
     default:
       return modifier_flag::zero;
@@ -254,215 +229,221 @@ public:
 
   // string -> hid usage map
   static const std::unordered_map<std::string, key_code>& get_key_code_map(void) {
-    static std::unordered_map<std::string, key_code> map;
+    static std::unordered_map<std::string, key_code> map({
+        // From IOHIDUsageTables.h
+        {"a", key_code(kHIDUsage_KeyboardA)},
+        {"b", key_code(kHIDUsage_KeyboardB)},
+        {"c", key_code(kHIDUsage_KeyboardC)},
+        {"d", key_code(kHIDUsage_KeyboardD)},
+        {"e", key_code(kHIDUsage_KeyboardE)},
+        {"f", key_code(kHIDUsage_KeyboardF)},
+        {"g", key_code(kHIDUsage_KeyboardG)},
+        {"h", key_code(kHIDUsage_KeyboardH)},
+        {"i", key_code(kHIDUsage_KeyboardI)},
+        {"j", key_code(kHIDUsage_KeyboardJ)},
+        {"k", key_code(kHIDUsage_KeyboardK)},
+        {"l", key_code(kHIDUsage_KeyboardL)},
+        {"m", key_code(kHIDUsage_KeyboardM)},
+        {"n", key_code(kHIDUsage_KeyboardN)},
+        {"o", key_code(kHIDUsage_KeyboardO)},
+        {"p", key_code(kHIDUsage_KeyboardP)},
+        {"q", key_code(kHIDUsage_KeyboardQ)},
+        {"r", key_code(kHIDUsage_KeyboardR)},
+        {"s", key_code(kHIDUsage_KeyboardS)},
+        {"t", key_code(kHIDUsage_KeyboardT)},
+        {"u", key_code(kHIDUsage_KeyboardU)},
+        {"v", key_code(kHIDUsage_KeyboardV)},
+        {"w", key_code(kHIDUsage_KeyboardW)},
+        {"x", key_code(kHIDUsage_KeyboardX)},
+        {"y", key_code(kHIDUsage_KeyboardY)},
+        {"z", key_code(kHIDUsage_KeyboardZ)},
+        {"1", key_code(kHIDUsage_Keyboard1)},
+        {"2", key_code(kHIDUsage_Keyboard2)},
+        {"3", key_code(kHIDUsage_Keyboard3)},
+        {"4", key_code(kHIDUsage_Keyboard4)},
+        {"5", key_code(kHIDUsage_Keyboard5)},
+        {"6", key_code(kHIDUsage_Keyboard6)},
+        {"7", key_code(kHIDUsage_Keyboard7)},
+        {"8", key_code(kHIDUsage_Keyboard8)},
+        {"9", key_code(kHIDUsage_Keyboard9)},
+        {"0", key_code(kHIDUsage_Keyboard0)},
+        {"return_or_enter", key_code(kHIDUsage_KeyboardReturnOrEnter)},
+        {"escape", key_code(kHIDUsage_KeyboardEscape)},
+        {"delete_or_backspace", key_code(kHIDUsage_KeyboardDeleteOrBackspace)},
+        {"tab", key_code(kHIDUsage_KeyboardTab)},
+        {"spacebar", key_code(kHIDUsage_KeyboardSpacebar)},
+        {"hyphen", key_code(kHIDUsage_KeyboardHyphen)},
+        {"equal_sign", key_code(kHIDUsage_KeyboardEqualSign)},
+        {"open_bracket", key_code(kHIDUsage_KeyboardOpenBracket)},
+        {"close_bracket", key_code(kHIDUsage_KeyboardCloseBracket)},
+        {"backslash", key_code(kHIDUsage_KeyboardBackslash)},
+        {"non_us_pound", key_code(kHIDUsage_KeyboardNonUSPound)},
+        {"semicolon", key_code(kHIDUsage_KeyboardSemicolon)},
+        {"quote", key_code(kHIDUsage_KeyboardQuote)},
+        {"grave_accent_and_tilde", key_code(kHIDUsage_KeyboardGraveAccentAndTilde)},
+        {"comma", key_code(kHIDUsage_KeyboardComma)},
+        {"period", key_code(kHIDUsage_KeyboardPeriod)},
+        {"slash", key_code(kHIDUsage_KeyboardSlash)},
+        {"caps_lock", key_code(kHIDUsage_KeyboardCapsLock)},
+        {"f1", key_code(kHIDUsage_KeyboardF1)},
+        {"f2", key_code(kHIDUsage_KeyboardF2)},
+        {"f3", key_code(kHIDUsage_KeyboardF3)},
+        {"f4", key_code(kHIDUsage_KeyboardF4)},
+        {"f5", key_code(kHIDUsage_KeyboardF5)},
+        {"f6", key_code(kHIDUsage_KeyboardF6)},
+        {"f7", key_code(kHIDUsage_KeyboardF7)},
+        {"f8", key_code(kHIDUsage_KeyboardF8)},
+        {"f9", key_code(kHIDUsage_KeyboardF9)},
+        {"f10", key_code(kHIDUsage_KeyboardF10)},
+        {"f11", key_code(kHIDUsage_KeyboardF11)},
+        {"f12", key_code(kHIDUsage_KeyboardF12)},
+        {"print_screen", key_code(kHIDUsage_KeyboardPrintScreen)},
+        {"scroll_lock", key_code(kHIDUsage_KeyboardScrollLock)},
+        {"pause", key_code(kHIDUsage_KeyboardPause)},
+        {"insert", key_code(kHIDUsage_KeyboardInsert)},
+        {"home", key_code(kHIDUsage_KeyboardHome)},
+        {"page_up", key_code(kHIDUsage_KeyboardPageUp)},
+        {"delete_forward", key_code(kHIDUsage_KeyboardDeleteForward)},
+        {"end", key_code(kHIDUsage_KeyboardEnd)},
+        {"page_down", key_code(kHIDUsage_KeyboardPageDown)},
+        {"right_arrow", key_code(kHIDUsage_KeyboardRightArrow)},
+        {"left_arrow", key_code(kHIDUsage_KeyboardLeftArrow)},
+        {"down_arrow", key_code(kHIDUsage_KeyboardDownArrow)},
+        {"up_arrow", key_code(kHIDUsage_KeyboardUpArrow)},
+        {"keypad_num_lock", key_code(kHIDUsage_KeypadNumLock)},
+        {"keypad_slash", key_code(kHIDUsage_KeypadSlash)},
+        {"keypad_asterisk", key_code(kHIDUsage_KeypadAsterisk)},
+        {"keypad_hyphen", key_code(kHIDUsage_KeypadHyphen)},
+        {"keypad_plus", key_code(kHIDUsage_KeypadPlus)},
+        {"keypad_enter", key_code(kHIDUsage_KeypadEnter)},
+        {"keypad_1", key_code(kHIDUsage_Keypad1)},
+        {"keypad_2", key_code(kHIDUsage_Keypad2)},
+        {"keypad_3", key_code(kHIDUsage_Keypad3)},
+        {"keypad_4", key_code(kHIDUsage_Keypad4)},
+        {"keypad_5", key_code(kHIDUsage_Keypad5)},
+        {"keypad_6", key_code(kHIDUsage_Keypad6)},
+        {"keypad_7", key_code(kHIDUsage_Keypad7)},
+        {"keypad_8", key_code(kHIDUsage_Keypad8)},
+        {"keypad_9", key_code(kHIDUsage_Keypad9)},
+        {"keypad_0", key_code(kHIDUsage_Keypad0)},
+        {"keypad_period", key_code(kHIDUsage_KeypadPeriod)},
+        {"non_us_backslash", key_code(kHIDUsage_KeyboardNonUSBackslash)},
+        {"application", key_code(kHIDUsage_KeyboardApplication)},
+        {"power", key_code(kHIDUsage_KeyboardPower)},
+        {"keypad_equal_sign", key_code(kHIDUsage_KeypadEqualSign)},
+        {"f13", key_code(kHIDUsage_KeyboardF13)},
+        {"f14", key_code(kHIDUsage_KeyboardF14)},
+        {"f15", key_code(kHIDUsage_KeyboardF15)},
+        {"f16", key_code(kHIDUsage_KeyboardF16)},
+        {"f17", key_code(kHIDUsage_KeyboardF17)},
+        {"f18", key_code(kHIDUsage_KeyboardF18)},
+        {"f19", key_code(kHIDUsage_KeyboardF19)},
+        {"f20", key_code(kHIDUsage_KeyboardF20)},
+        {"f21", key_code(kHIDUsage_KeyboardF21)},
+        {"f22", key_code(kHIDUsage_KeyboardF22)},
+        {"f23", key_code(kHIDUsage_KeyboardF23)},
+        {"f24", key_code(kHIDUsage_KeyboardF24)},
+        {"execute", key_code(kHIDUsage_KeyboardExecute)},
+        {"help", key_code(kHIDUsage_KeyboardHelp)},
+        {"menu", key_code(kHIDUsage_KeyboardMenu)},
+        {"select", key_code(kHIDUsage_KeyboardSelect)},
+        {"stop", key_code(kHIDUsage_KeyboardStop)},
+        {"again", key_code(kHIDUsage_KeyboardAgain)},
+        {"undo", key_code(kHIDUsage_KeyboardUndo)},
+        {"cut", key_code(kHIDUsage_KeyboardCut)},
+        {"copy", key_code(kHIDUsage_KeyboardCopy)},
+        {"paste", key_code(kHIDUsage_KeyboardPaste)},
+        {"find", key_code(kHIDUsage_KeyboardFind)},
+        {"mute", key_code(kHIDUsage_KeyboardMute)},
+        {"volume_decrement", key_code(kHIDUsage_KeyboardVolumeDown)},
+        {"volume_increment", key_code(kHIDUsage_KeyboardVolumeUp)},
+        {"locking_caps_lock", key_code(kHIDUsage_KeyboardLockingCapsLock)},
+        {"locking_num_lock", key_code(kHIDUsage_KeyboardLockingNumLock)},
+        {"locking_scroll_lock", key_code(kHIDUsage_KeyboardLockingScrollLock)},
+        {"keypad_comma", key_code(kHIDUsage_KeypadComma)},
+        {"keypad_equal_sign_as400", key_code(kHIDUsage_KeypadEqualSignAS400)},
+        {"international1", key_code(kHIDUsage_KeyboardInternational1)},
+        {"international2", key_code(kHIDUsage_KeyboardInternational2)},
+        {"international3", key_code(kHIDUsage_KeyboardInternational3)},
+        {"international4", key_code(kHIDUsage_KeyboardInternational4)},
+        {"international5", key_code(kHIDUsage_KeyboardInternational5)},
+        {"international6", key_code(kHIDUsage_KeyboardInternational6)},
+        {"international7", key_code(kHIDUsage_KeyboardInternational7)},
+        {"international8", key_code(kHIDUsage_KeyboardInternational8)},
+        {"international9", key_code(kHIDUsage_KeyboardInternational9)},
+        {"lang1", key_code(kHIDUsage_KeyboardLANG1)},
+        {"lang2", key_code(kHIDUsage_KeyboardLANG2)},
+        {"lang3", key_code(kHIDUsage_KeyboardLANG3)},
+        {"lang4", key_code(kHIDUsage_KeyboardLANG4)},
+        {"lang5", key_code(kHIDUsage_KeyboardLANG5)},
+        {"lang6", key_code(kHIDUsage_KeyboardLANG6)},
+        {"lang7", key_code(kHIDUsage_KeyboardLANG7)},
+        {"lang8", key_code(kHIDUsage_KeyboardLANG8)},
+        {"lang9", key_code(kHIDUsage_KeyboardLANG9)},
+        {"alternate_erase", key_code(kHIDUsage_KeyboardAlternateErase)},
+        {"sys_req_or_attention", key_code(kHIDUsage_KeyboardSysReqOrAttention)},
+        {"cancel", key_code(kHIDUsage_KeyboardCancel)},
+        {"clear", key_code(kHIDUsage_KeyboardClear)},
+        {"prior", key_code(kHIDUsage_KeyboardPrior)},
+        {"return", key_code(kHIDUsage_KeyboardReturn)},
+        {"separator", key_code(kHIDUsage_KeyboardSeparator)},
+        {"out", key_code(kHIDUsage_KeyboardOut)},
+        {"oper", key_code(kHIDUsage_KeyboardOper)},
+        {"clear_or_again", key_code(kHIDUsage_KeyboardClearOrAgain)},
+        {"cr_sel_or_props", key_code(kHIDUsage_KeyboardCrSelOrProps)},
+        {"ex_sel", key_code(kHIDUsage_KeyboardExSel)},
+        {"left_control", key_code(kHIDUsage_KeyboardLeftControl)},
+        {"left_shift", key_code(kHIDUsage_KeyboardLeftShift)},
+        {"left_alt", key_code(kHIDUsage_KeyboardLeftAlt)},
+        {"left_gui", key_code(kHIDUsage_KeyboardLeftGUI)},
+        {"right_control", key_code(kHIDUsage_KeyboardRightControl)},
+        {"right_shift", key_code(kHIDUsage_KeyboardRightShift)},
+        {"right_alt", key_code(kHIDUsage_KeyboardRightAlt)},
+        {"right_gui", key_code(kHIDUsage_KeyboardRightGUI)},
 
-    if (map.empty()) {
-      std::vector<std::pair<std::string, key_code>> pairs{
-          // From IOHIDUsageTables.h
-          {"a", key_code(kHIDUsage_KeyboardA)},
-          {"b", key_code(kHIDUsage_KeyboardB)},
-          {"c", key_code(kHIDUsage_KeyboardC)},
-          {"d", key_code(kHIDUsage_KeyboardD)},
-          {"e", key_code(kHIDUsage_KeyboardE)},
-          {"f", key_code(kHIDUsage_KeyboardF)},
-          {"g", key_code(kHIDUsage_KeyboardG)},
-          {"h", key_code(kHIDUsage_KeyboardH)},
-          {"i", key_code(kHIDUsage_KeyboardI)},
-          {"j", key_code(kHIDUsage_KeyboardJ)},
-          {"k", key_code(kHIDUsage_KeyboardK)},
-          {"l", key_code(kHIDUsage_KeyboardL)},
-          {"m", key_code(kHIDUsage_KeyboardM)},
-          {"n", key_code(kHIDUsage_KeyboardN)},
-          {"o", key_code(kHIDUsage_KeyboardO)},
-          {"p", key_code(kHIDUsage_KeyboardP)},
-          {"q", key_code(kHIDUsage_KeyboardQ)},
-          {"r", key_code(kHIDUsage_KeyboardR)},
-          {"s", key_code(kHIDUsage_KeyboardS)},
-          {"t", key_code(kHIDUsage_KeyboardT)},
-          {"u", key_code(kHIDUsage_KeyboardU)},
-          {"v", key_code(kHIDUsage_KeyboardV)},
-          {"w", key_code(kHIDUsage_KeyboardW)},
-          {"x", key_code(kHIDUsage_KeyboardX)},
-          {"y", key_code(kHIDUsage_KeyboardY)},
-          {"z", key_code(kHIDUsage_KeyboardZ)},
-          {"1", key_code(kHIDUsage_Keyboard1)},
-          {"2", key_code(kHIDUsage_Keyboard2)},
-          {"3", key_code(kHIDUsage_Keyboard3)},
-          {"4", key_code(kHIDUsage_Keyboard4)},
-          {"5", key_code(kHIDUsage_Keyboard5)},
-          {"6", key_code(kHIDUsage_Keyboard6)},
-          {"7", key_code(kHIDUsage_Keyboard7)},
-          {"8", key_code(kHIDUsage_Keyboard8)},
-          {"9", key_code(kHIDUsage_Keyboard9)},
-          {"0", key_code(kHIDUsage_Keyboard0)},
-          {"return_or_enter", key_code(kHIDUsage_KeyboardReturnOrEnter)},
-          {"escape", key_code(kHIDUsage_KeyboardEscape)},
-          {"delete_or_backspace", key_code(kHIDUsage_KeyboardDeleteOrBackspace)},
-          {"tab", key_code(kHIDUsage_KeyboardTab)},
-          {"spacebar", key_code(kHIDUsage_KeyboardSpacebar)},
-          {"hyphen", key_code(kHIDUsage_KeyboardHyphen)},
-          {"equal_sign", key_code(kHIDUsage_KeyboardEqualSign)},
-          {"open_bracket", key_code(kHIDUsage_KeyboardOpenBracket)},
-          {"close_bracket", key_code(kHIDUsage_KeyboardCloseBracket)},
-          {"backslash", key_code(kHIDUsage_KeyboardBackslash)},
-          {"non_us_pound", key_code(kHIDUsage_KeyboardNonUSPound)},
-          {"semicolon", key_code(kHIDUsage_KeyboardSemicolon)},
-          {"quote", key_code(kHIDUsage_KeyboardQuote)},
-          {"grave_accent_and_tilde", key_code(kHIDUsage_KeyboardGraveAccentAndTilde)},
-          {"comma", key_code(kHIDUsage_KeyboardComma)},
-          {"period", key_code(kHIDUsage_KeyboardPeriod)},
-          {"slash", key_code(kHIDUsage_KeyboardSlash)},
-          {"caps_lock", key_code(kHIDUsage_KeyboardCapsLock)},
-          {"f1", key_code(kHIDUsage_KeyboardF1)},
-          {"f2", key_code(kHIDUsage_KeyboardF2)},
-          {"f3", key_code(kHIDUsage_KeyboardF3)},
-          {"f4", key_code(kHIDUsage_KeyboardF4)},
-          {"f5", key_code(kHIDUsage_KeyboardF5)},
-          {"f6", key_code(kHIDUsage_KeyboardF6)},
-          {"f7", key_code(kHIDUsage_KeyboardF7)},
-          {"f8", key_code(kHIDUsage_KeyboardF8)},
-          {"f9", key_code(kHIDUsage_KeyboardF9)},
-          {"f10", key_code(kHIDUsage_KeyboardF10)},
-          {"f11", key_code(kHIDUsage_KeyboardF11)},
-          {"f12", key_code(kHIDUsage_KeyboardF12)},
-          {"print_screen", key_code(kHIDUsage_KeyboardPrintScreen)},
-          {"scroll_lock", key_code(kHIDUsage_KeyboardScrollLock)},
-          {"pause", key_code(kHIDUsage_KeyboardPause)},
-          {"insert", key_code(kHIDUsage_KeyboardInsert)},
-          {"home", key_code(kHIDUsage_KeyboardHome)},
-          {"page_up", key_code(kHIDUsage_KeyboardPageUp)},
-          {"delete_forward", key_code(kHIDUsage_KeyboardDeleteForward)},
-          {"end", key_code(kHIDUsage_KeyboardEnd)},
-          {"page_down", key_code(kHIDUsage_KeyboardPageDown)},
-          {"right_arrow", key_code(kHIDUsage_KeyboardRightArrow)},
-          {"left_arrow", key_code(kHIDUsage_KeyboardLeftArrow)},
-          {"down_arrow", key_code(kHIDUsage_KeyboardDownArrow)},
-          {"up_arrow", key_code(kHIDUsage_KeyboardUpArrow)},
-          {"keypad_num_lock", key_code(kHIDUsage_KeypadNumLock)},
-          {"keypad_slash", key_code(kHIDUsage_KeypadSlash)},
-          {"keypad_asterisk", key_code(kHIDUsage_KeypadAsterisk)},
-          {"keypad_hyphen", key_code(kHIDUsage_KeypadHyphen)},
-          {"keypad_plus", key_code(kHIDUsage_KeypadPlus)},
-          {"keypad_enter", key_code(kHIDUsage_KeypadEnter)},
-          {"keypad_1", key_code(kHIDUsage_Keypad1)},
-          {"keypad_2", key_code(kHIDUsage_Keypad2)},
-          {"keypad_3", key_code(kHIDUsage_Keypad3)},
-          {"keypad_4", key_code(kHIDUsage_Keypad4)},
-          {"keypad_5", key_code(kHIDUsage_Keypad5)},
-          {"keypad_6", key_code(kHIDUsage_Keypad6)},
-          {"keypad_7", key_code(kHIDUsage_Keypad7)},
-          {"keypad_8", key_code(kHIDUsage_Keypad8)},
-          {"keypad_9", key_code(kHIDUsage_Keypad9)},
-          {"keypad_0", key_code(kHIDUsage_Keypad0)},
-          {"keypad_period", key_code(kHIDUsage_KeypadPeriod)},
-          {"non_us_backslash", key_code(kHIDUsage_KeyboardNonUSBackslash)},
-          {"application", key_code(kHIDUsage_KeyboardApplication)},
-          {"power", key_code(kHIDUsage_KeyboardPower)},
-          {"keypad_equal_sign", key_code(kHIDUsage_KeypadEqualSign)},
-          {"f13", key_code(kHIDUsage_KeyboardF13)},
-          {"f14", key_code(kHIDUsage_KeyboardF14)},
-          {"f15", key_code(kHIDUsage_KeyboardF15)},
-          {"f16", key_code(kHIDUsage_KeyboardF16)},
-          {"f17", key_code(kHIDUsage_KeyboardF17)},
-          {"f18", key_code(kHIDUsage_KeyboardF18)},
-          {"f19", key_code(kHIDUsage_KeyboardF19)},
-          {"f20", key_code(kHIDUsage_KeyboardF20)},
-          {"f21", key_code(kHIDUsage_KeyboardF21)},
-          {"f22", key_code(kHIDUsage_KeyboardF22)},
-          {"f23", key_code(kHIDUsage_KeyboardF23)},
-          {"f24", key_code(kHIDUsage_KeyboardF24)},
-          {"execute", key_code(kHIDUsage_KeyboardExecute)},
-          {"help", key_code(kHIDUsage_KeyboardHelp)},
-          {"menu", key_code(kHIDUsage_KeyboardMenu)},
-          {"select", key_code(kHIDUsage_KeyboardSelect)},
-          {"stop", key_code(kHIDUsage_KeyboardStop)},
-          {"again", key_code(kHIDUsage_KeyboardAgain)},
-          {"undo", key_code(kHIDUsage_KeyboardUndo)},
-          {"cut", key_code(kHIDUsage_KeyboardCut)},
-          {"copy", key_code(kHIDUsage_KeyboardCopy)},
-          {"paste", key_code(kHIDUsage_KeyboardPaste)},
-          {"find", key_code(kHIDUsage_KeyboardFind)},
-          {"mute", key_code(kHIDUsage_KeyboardMute)},
-          {"volume_up", key_code(kHIDUsage_KeyboardVolumeUp)},
-          {"volume_down", key_code(kHIDUsage_KeyboardVolumeDown)},
-          {"locking_caps_lock", key_code(kHIDUsage_KeyboardLockingCapsLock)},
-          {"locking_num_lock", key_code(kHIDUsage_KeyboardLockingNumLock)},
-          {"locking_scroll_lock", key_code(kHIDUsage_KeyboardLockingScrollLock)},
-          {"keypad_comma", key_code(kHIDUsage_KeypadComma)},
-          {"keypad_equal_sign_as400", key_code(kHIDUsage_KeypadEqualSignAS400)},
-          {"international1", key_code(kHIDUsage_KeyboardInternational1)},
-          {"international2", key_code(kHIDUsage_KeyboardInternational2)},
-          {"international3", key_code(kHIDUsage_KeyboardInternational3)},
-          {"international4", key_code(kHIDUsage_KeyboardInternational4)},
-          {"international5", key_code(kHIDUsage_KeyboardInternational5)},
-          {"international6", key_code(kHIDUsage_KeyboardInternational6)},
-          {"international7", key_code(kHIDUsage_KeyboardInternational7)},
-          {"international8", key_code(kHIDUsage_KeyboardInternational8)},
-          {"international9", key_code(kHIDUsage_KeyboardInternational9)},
-          {"lang1", key_code(kHIDUsage_KeyboardLANG1)},
-          {"lang2", key_code(kHIDUsage_KeyboardLANG2)},
-          {"lang3", key_code(kHIDUsage_KeyboardLANG3)},
-          {"lang4", key_code(kHIDUsage_KeyboardLANG4)},
-          {"lang5", key_code(kHIDUsage_KeyboardLANG5)},
-          {"lang6", key_code(kHIDUsage_KeyboardLANG6)},
-          {"lang7", key_code(kHIDUsage_KeyboardLANG7)},
-          {"lang8", key_code(kHIDUsage_KeyboardLANG8)},
-          {"lang9", key_code(kHIDUsage_KeyboardLANG9)},
-          {"alternate_erase", key_code(kHIDUsage_KeyboardAlternateErase)},
-          {"sys_req_or_attention", key_code(kHIDUsage_KeyboardSysReqOrAttention)},
-          {"cancel", key_code(kHIDUsage_KeyboardCancel)},
-          {"clear", key_code(kHIDUsage_KeyboardClear)},
-          {"prior", key_code(kHIDUsage_KeyboardPrior)},
-          {"return", key_code(kHIDUsage_KeyboardReturn)},
-          {"separator", key_code(kHIDUsage_KeyboardSeparator)},
-          {"out", key_code(kHIDUsage_KeyboardOut)},
-          {"oper", key_code(kHIDUsage_KeyboardOper)},
-          {"clear_or_again", key_code(kHIDUsage_KeyboardClearOrAgain)},
-          {"cr_sel_or_props", key_code(kHIDUsage_KeyboardCrSelOrProps)},
-          {"ex_sel", key_code(kHIDUsage_KeyboardExSel)},
-          {"left_control", key_code(kHIDUsage_KeyboardLeftControl)},
-          {"left_shift", key_code(kHIDUsage_KeyboardLeftShift)},
-          {"left_alt", key_code(kHIDUsage_KeyboardLeftAlt)},
-          {"left_gui", key_code(kHIDUsage_KeyboardLeftGUI)},
-          {"right_control", key_code(kHIDUsage_KeyboardRightControl)},
-          {"right_shift", key_code(kHIDUsage_KeyboardRightShift)},
-          {"right_alt", key_code(kHIDUsage_KeyboardRightAlt)},
-          {"right_gui", key_code(kHIDUsage_KeyboardRightGUI)},
+        // Extra
+        {"vk_none", key_code::vk_none},
 
-          // Aliases
-          {"left_option", key_code(kHIDUsage_KeyboardLeftAlt)},
-          {"left_command", key_code(kHIDUsage_KeyboardLeftGUI)},
-          {"right_option", key_code(kHIDUsage_KeyboardRightAlt)},
-          {"right_command", key_code(kHIDUsage_KeyboardRightGUI)},
-          {"japanese_eisuu", key_code(kHIDUsage_KeyboardLANG2)},
-          {"japanese_kana", key_code(kHIDUsage_KeyboardLANG1)},
-          {"japanese_pc_nfer", key_code(kHIDUsage_KeyboardInternational5)},
-          {"japanese_pc_xfer", key_code(kHIDUsage_KeyboardInternational4)},
-          {"japanese_pc_katakana", key_code(kHIDUsage_KeyboardInternational2)},
+        {"fn", key_code::fn},
+        {"display_brightness_decrement", key_code::display_brightness_decrement},
+        {"display_brightness_increment", key_code::display_brightness_increment},
+        {"mission_control", key_code::mission_control},
+        {"launchpad", key_code::launchpad},
+        {"dashboard", key_code::dashboard},
+        {"illumination_decrement", key_code::illumination_decrement},
+        {"illumination_increment", key_code::illumination_increment},
+        {"rewind", key_code::rewind},
+        {"play_or_pause", key_code::play_or_pause},
+        {"fastforward", key_code::fastforward},
+        {"eject", key_code::eject},
+        {"apple_display_brightness_decrement", key_code::apple_display_brightness_decrement},
+        {"apple_display_brightness_increment", key_code::apple_display_brightness_increment},
+        {"apple_top_case_display_brightness_decrement", key_code::apple_top_case_display_brightness_decrement},
+        {"apple_top_case_display_brightness_increment", key_code::apple_top_case_display_brightness_increment},
 
-          // Extra
-          {"fn", key_code::vk_fn_modifier},
-          {"vk_none", key_code::vk_none},
-          {"vk_consumer_brightness_down", key_code::vk_consumer_brightness_down},
-          {"vk_consumer_brightness_up", key_code::vk_consumer_brightness_up},
-          {"vk_consumer_illumination_down", key_code::vk_consumer_illumination_down},
-          {"vk_consumer_illumination_up", key_code::vk_consumer_illumination_up},
-          {"vk_consumer_next", key_code::vk_consumer_next},
-          {"vk_consumer_play", key_code::vk_consumer_play},
-          {"vk_consumer_previous", key_code::vk_consumer_previous},
-          {"vk_dashboard", key_code::vk_dashboard},
-          {"vk_launchpad", key_code::vk_launchpad},
-          {"vk_mission_control", key_code::vk_mission_control},
-      };
-      for (const auto& pair : pairs) {
-        if (map.find(pair.first) != map.end()) {
-          std::cerr << "fatal: duplicated key: " << pair.first << std::endl;
-          exit(1);
-        } else {
-          map[pair.first] = pair.second;
-        }
-      }
-    }
+        // Aliases
+        {"left_option", key_code(kHIDUsage_KeyboardLeftAlt)},
+        {"left_command", key_code(kHIDUsage_KeyboardLeftGUI)},
+        {"right_option", key_code(kHIDUsage_KeyboardRightAlt)},
+        {"right_command", key_code(kHIDUsage_KeyboardRightGUI)},
+        {"japanese_eisuu", key_code(kHIDUsage_KeyboardLANG2)},
+        {"japanese_kana", key_code(kHIDUsage_KeyboardLANG1)},
+        {"japanese_pc_nfer", key_code(kHIDUsage_KeyboardInternational5)},
+        {"japanese_pc_xfer", key_code(kHIDUsage_KeyboardInternational4)},
+        {"japanese_pc_katakana", key_code(kHIDUsage_KeyboardInternational2)},
+        {"vk_consumer_brightness_down", key_code::display_brightness_decrement},
+        {"vk_consumer_brightness_up", key_code::display_brightness_increment},
+        {"vk_mission_control", key_code::mission_control},
+        {"vk_launchpad", key_code::launchpad},
+        {"vk_dashboard", key_code::dashboard},
+        {"vk_consumer_illumination_down", key_code::illumination_decrement},
+        {"vk_consumer_illumination_up", key_code::illumination_increment},
+        {"vk_consumer_previous", key_code::rewind},
+        {"vk_consumer_play", key_code::play_or_pause},
+        {"vk_consumer_next", key_code::fastforward},
+        {"volume_down", key_code(kHIDUsage_KeyboardVolumeDown)},
+        {"volume_up", key_code(kHIDUsage_KeyboardVolumeUp)},
+    });
     return map;
   }
 
@@ -479,274 +460,50 @@ public:
     switch (usage_page) {
     case kHIDPage_KeyboardOrKeypad:
       if (kHIDUsage_KeyboardErrorUndefined < usage && usage < kHIDUsage_Keyboard_Reserved) {
-        return krbn::key_code(usage);
+        return key_code(usage);
       }
       break;
 
     case kHIDPage_AppleVendorTopCase:
       if (usage == kHIDUsage_AV_TopCase_KeyboardFn) {
-        return krbn::key_code::vk_fn_modifier;
+        return key_code::fn;
+      }
+      break;
+
+    case kHIDPage_AppleVendorKeyboard:
+      if (usage == kHIDUsage_AppleVendorKeyboard_Function) {
+        return key_code::fn;
       }
       break;
     }
     return boost::none;
   }
 
-  // hid usage -> CoreGraphics key code
-  static const std::unordered_map<key_code, uint8_t>& get_hid_system_key_map(void) {
-    static std::unordered_map<key_code, uint8_t> map;
-    if (map.empty()) {
-      map[key_code(kHIDUsage_KeyboardA)] = 0x0;
-      map[key_code(kHIDUsage_KeyboardB)] = 0xb;
-      map[key_code(kHIDUsage_KeyboardC)] = 0x8;
-      map[key_code(kHIDUsage_KeyboardD)] = 0x2;
-      map[key_code(kHIDUsage_KeyboardE)] = 0xe;
-      map[key_code(kHIDUsage_KeyboardF)] = 0x3;
-      map[key_code(kHIDUsage_KeyboardG)] = 0x5;
-      map[key_code(kHIDUsage_KeyboardH)] = 0x4;
-      map[key_code(kHIDUsage_KeyboardI)] = 0x22;
-      map[key_code(kHIDUsage_KeyboardJ)] = 0x26;
-      map[key_code(kHIDUsage_KeyboardK)] = 0x28;
-      map[key_code(kHIDUsage_KeyboardL)] = 0x25;
-      map[key_code(kHIDUsage_KeyboardM)] = 0x2e;
-      map[key_code(kHIDUsage_KeyboardN)] = 0x2d;
-      map[key_code(kHIDUsage_KeyboardO)] = 0x1f;
-      map[key_code(kHIDUsage_KeyboardP)] = 0x23;
-      map[key_code(kHIDUsage_KeyboardQ)] = 0xc;
-      map[key_code(kHIDUsage_KeyboardR)] = 0xf;
-      map[key_code(kHIDUsage_KeyboardS)] = 0x1;
-      map[key_code(kHIDUsage_KeyboardT)] = 0x11;
-      map[key_code(kHIDUsage_KeyboardU)] = 0x20;
-      map[key_code(kHIDUsage_KeyboardV)] = 0x9;
-      map[key_code(kHIDUsage_KeyboardW)] = 0xd;
-      map[key_code(kHIDUsage_KeyboardX)] = 0x7;
-      map[key_code(kHIDUsage_KeyboardY)] = 0x10;
-      map[key_code(kHIDUsage_KeyboardZ)] = 0x6;
-
-      map[key_code(kHIDUsage_Keyboard1)] = 0x12;
-      map[key_code(kHIDUsage_Keyboard2)] = 0x13;
-      map[key_code(kHIDUsage_Keyboard3)] = 0x14;
-      map[key_code(kHIDUsage_Keyboard4)] = 0x15;
-      map[key_code(kHIDUsage_Keyboard5)] = 0x17;
-      map[key_code(kHIDUsage_Keyboard6)] = 0x16;
-      map[key_code(kHIDUsage_Keyboard7)] = 0x1a;
-      map[key_code(kHIDUsage_Keyboard8)] = 0x1c;
-      map[key_code(kHIDUsage_Keyboard9)] = 0x19;
-      map[key_code(kHIDUsage_Keyboard0)] = 0x1d;
-
-      map[key_code(kHIDUsage_KeyboardReturnOrEnter)] = 0x24;
-      map[key_code(kHIDUsage_KeyboardEscape)] = 0x35;
-      map[key_code(kHIDUsage_KeyboardDeleteOrBackspace)] = 0x33;
-      map[key_code(kHIDUsage_KeyboardTab)] = 0x30;
-      map[key_code(kHIDUsage_KeyboardSpacebar)] = 0x31;
-      map[key_code(kHIDUsage_KeyboardHyphen)] = 0x1b;
-      map[key_code(kHIDUsage_KeyboardEqualSign)] = 0x18;
-      map[key_code(kHIDUsage_KeyboardOpenBracket)] = 0x21;
-      map[key_code(kHIDUsage_KeyboardCloseBracket)] = 0x1e;
-      map[key_code(kHIDUsage_KeyboardBackslash)] = 0x2a;
-      map[key_code(kHIDUsage_KeyboardNonUSPound)] = 0x2a; // == kHIDUsage_KeyboardBackslash
-      map[key_code(kHIDUsage_KeyboardSemicolon)] = 0x29;
-      map[key_code(kHIDUsage_KeyboardQuote)] = 0x27;
-      map[key_code(kHIDUsage_KeyboardGraveAccentAndTilde)] = 0x32;
-      map[key_code(kHIDUsage_KeyboardComma)] = 0x2b;
-      map[key_code(kHIDUsage_KeyboardPeriod)] = 0x2f;
-      map[key_code(kHIDUsage_KeyboardSlash)] = 0x2c;
-      map[key_code(kHIDUsage_KeyboardCapsLock)] = 0x39;
-
-      map[key_code(kHIDUsage_KeyboardF1)] = 0x7a;
-      map[key_code(kHIDUsage_KeyboardF2)] = 0x78;
-      map[key_code(kHIDUsage_KeyboardF3)] = 0x63;
-      map[key_code(kHIDUsage_KeyboardF4)] = 0x76;
-      map[key_code(kHIDUsage_KeyboardF5)] = 0x60;
-      map[key_code(kHIDUsage_KeyboardF6)] = 0x61;
-      map[key_code(kHIDUsage_KeyboardF7)] = 0x62;
-      map[key_code(kHIDUsage_KeyboardF8)] = 0x64;
-      map[key_code(kHIDUsage_KeyboardF9)] = 0x65;
-      map[key_code(kHIDUsage_KeyboardF10)] = 0x6d;
-      map[key_code(kHIDUsage_KeyboardF11)] = 0x67;
-      map[key_code(kHIDUsage_KeyboardF12)] = 0x6f;
-
-      map[key_code(kHIDUsage_KeyboardPrintScreen)] = 0x69;
-      map[key_code(kHIDUsage_KeyboardScrollLock)] = 0x6b;
-
-      map[key_code(kHIDUsage_KeyboardPause)] = 0x71;
-      map[key_code(kHIDUsage_KeyboardInsert)] = 0x72;
-      map[key_code(kHIDUsage_KeyboardHome)] = 0x73;
-      map[key_code(kHIDUsage_KeyboardPageUp)] = 0x74;
-      map[key_code(kHIDUsage_KeyboardDeleteForward)] = 0x75;
-      map[key_code(kHIDUsage_KeyboardEnd)] = 0x77;
-      map[key_code(kHIDUsage_KeyboardPageDown)] = 0x79;
-      map[key_code(kHIDUsage_KeyboardRightArrow)] = 0x7c;
-      map[key_code(kHIDUsage_KeyboardLeftArrow)] = 0x7b;
-      map[key_code(kHIDUsage_KeyboardDownArrow)] = 0x7d;
-      map[key_code(kHIDUsage_KeyboardUpArrow)] = 0x7e;
-
-      map[key_code(kHIDUsage_KeypadNumLock)] = 0x47;
-      map[key_code(kHIDUsage_KeypadSlash)] = 0x4b;
-      map[key_code(kHIDUsage_KeypadAsterisk)] = 0x43;
-      map[key_code(kHIDUsage_KeypadHyphen)] = 0x4e;
-      map[key_code(kHIDUsage_KeypadPlus)] = 0x45;
-      map[key_code(kHIDUsage_KeypadEnter)] = 0x4c;
-      map[key_code(kHIDUsage_Keypad1)] = 0x53;
-      map[key_code(kHIDUsage_Keypad2)] = 0x54;
-      map[key_code(kHIDUsage_Keypad3)] = 0x55;
-      map[key_code(kHIDUsage_Keypad4)] = 0x56;
-      map[key_code(kHIDUsage_Keypad5)] = 0x57;
-      map[key_code(kHIDUsage_Keypad6)] = 0x58;
-      map[key_code(kHIDUsage_Keypad7)] = 0x59;
-      map[key_code(kHIDUsage_Keypad8)] = 0x5b;
-      map[key_code(kHIDUsage_Keypad9)] = 0x5c;
-      map[key_code(kHIDUsage_Keypad0)] = 0x52;
-      map[key_code(kHIDUsage_KeypadPeriod)] = 0x41;
-
-      map[key_code(kHIDUsage_KeyboardNonUSBackslash)] = 0xa;
-      map[key_code(kHIDUsage_KeyboardApplication)] = 0x6e;
-
-      // map[key_code(kHIDUsage_KeyboardPower)] => get_hid_system_aux_control_button_map
-
-      map[key_code(kHIDUsage_KeypadEqualSign)] = 0x51;
-
-      map[key_code(kHIDUsage_KeyboardF13)] = 0x69;
-      map[key_code(kHIDUsage_KeyboardF14)] = 0x6b;
-      map[key_code(kHIDUsage_KeyboardF15)] = 0x71;
-      map[key_code(kHIDUsage_KeyboardF16)] = 0x6a;
-      map[key_code(kHIDUsage_KeyboardF17)] = 0x40;
-      map[key_code(kHIDUsage_KeyboardF18)] = 0x4f;
-      map[key_code(kHIDUsage_KeyboardF19)] = 0x50;
-      map[key_code(kHIDUsage_KeyboardF20)] = 0x5a;
-      // map[key_code(kHIDUsage_KeyboardF21)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardF22)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardF23)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardF24)] => mac ignores this key
-
-      // map[key_code(kHIDUsage_KeyboardExecute)] => mac ignores this key
-      map[key_code(kHIDUsage_KeyboardHelp)] = 0x72;
-      // map[key_code(kHIDUsage_KeyboardMenu)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardSelect)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardStop)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardAgain)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardUndo)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardCut)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardCopy)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardPaste)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardFind)] = mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardMute)] => get_hid_system_aux_control_button_map
-      // map[key_code(kHIDUsage_KeyboardVolumeUp)] => get_hid_system_aux_control_button_map
-      // map[key_code(kHIDUsage_KeyboardVolumeDown)] => get_hid_system_aux_control_button_map
-
-      // map[key_code(kHIDUsage_KeyboardLockingCapsLock)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardLockingNumLock)] => ??
-      // map[key_code(kHIDUsage_KeyboardLockingScrollLock)] => mac ignores this key
-      map[key_code(kHIDUsage_KeypadComma)] = 0x5f;
-      // map[key_code(kHIDUsage_KeypadEqualSignAS400)] => mac ignores this key
-
-      map[key_code(kHIDUsage_KeyboardInternational1)] = 0x5e;
-      // map[key_code(kHIDUsage_KeyboardInternational2)] => mac ignores this key
-      map[key_code(kHIDUsage_KeyboardInternational3)] = 0x5d;
-      // map[key_code(kHIDUsage_KeyboardInternational4)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardInternational5)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardInternational6)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardInternational7)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardInternational8)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardInternational9)] => mac ignores this key
-
-      map[key_code(kHIDUsage_KeyboardLANG1)] = 0x68;
-      map[key_code(kHIDUsage_KeyboardLANG2)] = 0x66;
-      // map[key_code(kHIDUsage_KeyboardLANG3)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardLANG4)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardLANG5)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardLANG6)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardLANG7)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardLANG8)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardLANG9)] => mac ignores this key
-
-      // map[key_code(kHIDUsage_KeyboardAlternateErase)]    => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardSysReqOrAttention)] => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardCancel)]            => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardClear)]             => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardPrior)]             => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardReturn)]            => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardSeparator)]         => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardOut)]               => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardOper)]              => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardClearOrAgain)]      => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardCrSelOrProps)]      => mac ignores this key
-      // map[key_code(kHIDUsage_KeyboardExSel)]             => mac ignores this key
-
-      map[key_code(kHIDUsage_KeyboardLeftControl)] = 0x3b;
-      map[key_code(kHIDUsage_KeyboardLeftShift)] = 0x38;
-      map[key_code(kHIDUsage_KeyboardLeftAlt)] = 0x3a;
-      map[key_code(kHIDUsage_KeyboardLeftGUI)] = 0x37;
-      map[key_code(kHIDUsage_KeyboardRightControl)] = 0x3e;
-      map[key_code(kHIDUsage_KeyboardRightShift)] = 0x3c;
-      map[key_code(kHIDUsage_KeyboardRightAlt)] = 0x3d;
-      map[key_code(kHIDUsage_KeyboardRightGUI)] = 0x36;
-
-      map[key_code::vk_fn_modifier] = 0x3f;
-      map[key_code::vk_dashboard] = 0x82;
-      map[key_code::vk_launchpad] = 0x83;
-      map[key_code::vk_mission_control] = 0xa0;
-    }
-    return map;
-  }
-
-  static boost::optional<uint8_t> get_hid_system_key(key_code key_code) {
-    auto& map = get_hid_system_key_map();
-    auto it = map.find(key_code);
-    if (it == map.end()) {
-      return boost::none;
-    }
-    return it->second;
-  }
-
-  static const std::unordered_map<key_code, uint8_t>& get_hid_system_aux_control_button_map(void) {
-    static std::unordered_map<key_code, uint8_t> map;
-    if (map.empty()) {
-      map[key_code(kHIDUsage_KeyboardPower)] = NX_POWER_KEY;
-      map[key_code(kHIDUsage_KeyboardMute)] = NX_KEYTYPE_MUTE;
-      map[key_code(kHIDUsage_KeyboardVolumeUp)] = NX_KEYTYPE_SOUND_UP;
-      map[key_code(kHIDUsage_KeyboardVolumeDown)] = NX_KEYTYPE_SOUND_DOWN;
-
-      map[key_code::vk_consumer_brightness_down] = NX_KEYTYPE_BRIGHTNESS_DOWN;
-      map[key_code::vk_consumer_brightness_up] = NX_KEYTYPE_BRIGHTNESS_UP;
-      map[key_code::vk_consumer_illumination_down] = NX_KEYTYPE_ILLUMINATION_DOWN;
-      map[key_code::vk_consumer_illumination_up] = NX_KEYTYPE_ILLUMINATION_UP;
-      map[key_code::vk_consumer_next] = NX_KEYTYPE_FAST;
-      map[key_code::vk_consumer_play] = NX_KEYTYPE_PLAY;
-      map[key_code::vk_consumer_previous] = NX_KEYTYPE_REWIND;
-    }
-    return map;
-  }
-
-  static boost::optional<uint8_t> get_hid_system_aux_control_button(key_code key_code) {
-    auto& map = get_hid_system_aux_control_button_map();
-    auto it = map.find(key_code);
-    if (it == map.end()) {
-      return boost::none;
-    }
-    return it->second;
-  }
-
   static boost::optional<pqrs::karabiner_virtual_hid_device::usage_page> get_usage_page(key_code key_code) {
     switch (key_code) {
-    case key_code::vk_fn_modifier:
-    case key_code::vk_consumer_illumination_down:
-    case key_code::vk_consumer_illumination_up:
+    case key_code::fn:
+    case key_code::illumination_decrement:
+    case key_code::illumination_increment:
+    case key_code::apple_top_case_display_brightness_decrement:
+    case key_code::apple_top_case_display_brightness_increment:
       return pqrs::karabiner_virtual_hid_device::usage_page::apple_vendor_top_case;
 
-    case key_code::vk_dashboard:
-    case key_code::vk_launchpad:
-    case key_code::vk_mission_control:
+    case key_code::dashboard:
+    case key_code::launchpad:
+    case key_code::mission_control:
+    case key_code::apple_display_brightness_decrement:
+    case key_code::apple_display_brightness_increment:
       return pqrs::karabiner_virtual_hid_device::usage_page::apple_vendor_keyboard;
 
     case key_code::mute:
-    case key_code::volume_up:
-    case key_code::volume_down:
-    case key_code::vk_consumer_brightness_down:
-    case key_code::vk_consumer_brightness_up:
-    case key_code::vk_consumer_next:
-    case key_code::vk_consumer_play:
-    case key_code::vk_consumer_previous:
+    case key_code::volume_decrement:
+    case key_code::volume_increment:
+    case key_code::display_brightness_decrement:
+    case key_code::display_brightness_increment:
+    case key_code::rewind:
+    case key_code::play_or_pause:
+    case key_code::fastforward:
+    case key_code::eject:
       return pqrs::karabiner_virtual_hid_device::usage_page::consumer;
 
     default:
@@ -756,47 +513,62 @@ public:
 
   static boost::optional<pqrs::karabiner_virtual_hid_device::usage> get_usage(key_code key_code) {
     switch (key_code) {
-    case key_code::vk_fn_modifier:
+    case key_code::fn:
       return pqrs::karabiner_virtual_hid_device::usage::av_top_case_keyboard_fn;
 
-    case key_code::vk_consumer_illumination_down:
+    case key_code::illumination_decrement:
       return pqrs::karabiner_virtual_hid_device::usage::av_top_case_illumination_down;
 
-    case key_code::vk_consumer_illumination_up:
+    case key_code::illumination_increment:
       return pqrs::karabiner_virtual_hid_device::usage::av_top_case_illumination_up;
 
-    case key_code::vk_dashboard:
+    case key_code::apple_top_case_display_brightness_decrement:
+      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_brightness_down;
+
+    case key_code::apple_top_case_display_brightness_increment:
+      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_brightness_up;
+
+    case key_code::dashboard:
       return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_dashboard;
 
-    case key_code::vk_launchpad:
+    case key_code::launchpad:
       return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_launchpad;
 
-    case key_code::vk_mission_control:
+    case key_code::mission_control:
       return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_expose_all;
+
+    case key_code::apple_display_brightness_decrement:
+      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_brightness_down;
+
+    case key_code::apple_display_brightness_increment:
+      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_brightness_up;
 
     case key_code::mute:
       return pqrs::karabiner_virtual_hid_device::usage::csmr_mute;
 
-    case key_code::volume_up:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_increment;
-
-    case key_code::volume_down:
+    case key_code::volume_decrement:
       return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_decrement;
 
-    case key_code::vk_consumer_brightness_down:
+    case key_code::volume_increment:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_increment;
+
+    case key_code::display_brightness_decrement:
       return pqrs::karabiner_virtual_hid_device::usage::csmr_display_brightness_decrement;
 
-    case key_code::vk_consumer_brightness_up:
+    case key_code::display_brightness_increment:
       return pqrs::karabiner_virtual_hid_device::usage::csmr_display_brightness_increment;
 
-    case key_code::vk_consumer_next:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_fastforward;
+    case key_code::rewind:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_rewind;
 
-    case key_code::vk_consumer_play:
+    case key_code::play_or_pause:
       return pqrs::karabiner_virtual_hid_device::usage::csmr_play_or_pause;
 
-    case key_code::vk_consumer_previous:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_rewind;
+    case key_code::fastforward:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_fastforward;
+
+    case key_code::eject:
+      return pqrs::karabiner_virtual_hid_device::usage::csmr_eject;
 
     default:
       return pqrs::karabiner_virtual_hid_device::usage(key_code);
@@ -805,18 +577,42 @@ public:
 
   static boost::optional<pointing_button> get_pointing_button(uint32_t usage_page, uint32_t usage) {
     if (usage_page == kHIDPage_Button) {
-      return krbn::pointing_button(usage);
+      return pointing_button(usage);
     }
     return boost::none;
+  }
+
+  static const std::unordered_map<std::string, pqrs::karabiner_virtual_hid_device::properties::keyboard_type>& get_keyboard_type_map(void) {
+    static std::unordered_map<std::string, pqrs::karabiner_virtual_hid_device::properties::keyboard_type> map({
+        {"none", pqrs::karabiner_virtual_hid_device::properties::keyboard_type::none},
+        {"ansi", pqrs::karabiner_virtual_hid_device::properties::keyboard_type::ansi},
+        {"iso", pqrs::karabiner_virtual_hid_device::properties::keyboard_type::iso},
+        {"jis", pqrs::karabiner_virtual_hid_device::properties::keyboard_type::jis},
+    });
+
+    return map;
+  }
+
+  static boost::optional<pqrs::karabiner_virtual_hid_device::properties::keyboard_type> get_keyboard_type(const std::string& name) {
+    auto& map = get_keyboard_type_map();
+    auto it = map.find(name);
+    if (it == map.end()) {
+      return boost::none;
+    }
+    return it->second;
   }
 };
 
 struct operation_type_connect_struct {
-  operation_type_connect_struct(void) : operation_type(operation_type::connect) {}
+  operation_type_connect_struct(void) : operation_type(operation_type::connect) {
+    strlcpy(user_core_configuration_file_path,
+            constants::get_user_core_configuration_file_path().c_str(),
+            sizeof(user_core_configuration_file_path));
+  }
 
   const operation_type operation_type;
-  connect_from connect_from;
   pid_t pid;
+  char user_core_configuration_file_path[_POSIX_PATH_MAX];
 };
 
 struct operation_type_system_preferences_values_updated_struct {
@@ -824,53 +620,5 @@ struct operation_type_system_preferences_values_updated_struct {
 
   const operation_type operation_type;
   system_preferences::values values;
-};
-
-struct operation_type_clear_simple_modifications_struct {
-  operation_type_clear_simple_modifications_struct(void) : operation_type(operation_type::clear_simple_modifications) {}
-
-  const operation_type operation_type;
-};
-
-struct operation_type_add_simple_modification_struct {
-  operation_type_add_simple_modification_struct(void) : operation_type(operation_type::add_simple_modification) {}
-
-  const operation_type operation_type;
-  key_code from_key_code;
-  key_code to_key_code;
-};
-
-struct operation_type_clear_fn_function_keys_struct {
-  operation_type_clear_fn_function_keys_struct(void) : operation_type(operation_type::clear_fn_function_keys) {}
-
-  const operation_type operation_type;
-};
-
-struct operation_type_add_fn_function_key_struct {
-  operation_type_add_fn_function_key_struct(void) : operation_type(operation_type::add_fn_function_key) {}
-
-  const operation_type operation_type;
-  key_code from_key_code;
-  key_code to_key_code;
-};
-
-struct operation_type_clear_devices_struct {
-  operation_type_clear_devices_struct(void) : operation_type(operation_type::clear_devices) {}
-
-  const operation_type operation_type;
-};
-
-struct operation_type_add_device_struct {
-  operation_type_add_device_struct(void) : operation_type(operation_type::add_device) {}
-
-  const operation_type operation_type;
-  device_identifiers_struct device_identifiers_struct;
-  device_configuration_struct device_configuration_struct;
-};
-
-struct operation_type_complete_devices_struct {
-  operation_type_complete_devices_struct(void) : operation_type(operation_type::complete_devices) {}
-
-  const operation_type operation_type;
 };
 }

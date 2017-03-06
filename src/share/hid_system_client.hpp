@@ -9,6 +9,7 @@
 #include <list>
 #include <memory>
 
+namespace krbn {
 class hid_system_client final {
 public:
   hid_system_client(const hid_system_client&) = delete;
@@ -47,63 +48,6 @@ public:
     if (matching_dictionary_) {
       CFRelease(matching_dictionary_);
     }
-  }
-
-  void post_modifier_flags(krbn::key_code key_code, IOOptionBits flags, krbn::keyboard_type keyboard_type) {
-    if (auto key = krbn::types::get_hid_system_key(key_code)) {
-      NXEventData event{};
-      event.key.keyCode = *key;
-      event.key.keyboardType = static_cast<uint32_t>(keyboard_type);
-
-      IOGPoint loc{};
-      post_event(NX_FLAGSCHANGED, loc, &event, kNXEventDataVersion, flags, kIOHIDSetGlobalEventFlags);
-
-      return;
-    }
-
-    logger_.warn("key_code:{1:#x} is unsupported key @ {0}", __PRETTY_FUNCTION__, static_cast<uint32_t>(key_code));
-  }
-
-  void post_key(krbn::key_code key_code, krbn::event_type event_type, IOOptionBits flags, krbn::keyboard_type keyboard_type, bool repeat) {
-    if (auto key = krbn::types::get_hid_system_aux_control_button(key_code)) {
-      post_aux_control_button(*key, event_type, flags, repeat);
-      return;
-    }
-
-    if (auto key = krbn::types::get_hid_system_key(key_code)) {
-      post_key(*key, event_type, flags, keyboard_type, repeat);
-      return;
-    }
-
-    logger_.warn("key_code:{1:#x} is unsupported key @ {0}", __PRETTY_FUNCTION__, static_cast<uint32_t>(key_code));
-  }
-
-  void post_key(uint8_t key_code, krbn::event_type event_type, IOOptionBits flags, krbn::keyboard_type keyboard_type, bool repeat) {
-    NXEventData event{};
-    event.key.origCharCode = 0;
-    event.key.repeat = repeat;
-    event.key.charSet = NX_ASCIISET;
-    event.key.charCode = 0;
-    event.key.keyCode = key_code;
-    event.key.origCharSet = NX_ASCIISET;
-    event.key.keyboardType = static_cast<uint32_t>(keyboard_type);
-
-    IOGPoint loc{};
-    post_event(event_type == krbn::event_type::key_down ? NX_KEYDOWN : NX_KEYUP,
-               loc,
-               &event,
-               kNXEventDataVersion,
-               flags,
-               kIOHIDSetGlobalEventFlags);
-  }
-
-  void post_aux_control_button(uint8_t key_code, krbn::event_type event_type, IOOptionBits flags, bool repeat) {
-    NXEventData event{};
-    event.compound.subType = NX_SUBTYPE_AUX_CONTROL_BUTTONS;
-    event.compound.misc.L[0] = (key_code << 16) | ((event_type == krbn::event_type::key_down ? NX_KEYDOWN : NX_KEYUP) << 8) | repeat;
-
-    IOGPoint loc{};
-    post_event(NX_SYSDEFINED, loc, &event, kNXEventDataVersion, flags, kIOHIDSetGlobalEventFlags);
   }
 
   boost::optional<bool> get_caps_lock_state(void) {
@@ -161,25 +105,6 @@ private:
     } else {
       matched_callback(it);
       IOObjectRelease(it);
-    }
-  }
-
-  void post_event(UInt32 event_type,
-                  IOGPoint location,
-                  const NXEventData* _Nullable event_data,
-                  UInt32 event_data_version,
-                  IOOptionBits event_flags,
-                  IOOptionBits options) {
-    std::lock_guard<std::mutex> guard(connect_mutex_);
-
-    if (!connect_) {
-      logger_.error("connect_ is null @ {0}", __PRETTY_FUNCTION__);
-      return;
-    }
-
-    auto kr = IOHIDPostEvent(connect_, event_type, location, event_data, event_data_version, event_flags, options);
-    if (kr != KERN_SUCCESS) {
-      logger_.error("IOHIDPostEvent error: {1} @ {0}", __PRETTY_FUNCTION__, kr);
     }
   }
 
@@ -244,3 +169,4 @@ private:
   io_connect_t connect_;
   std::mutex connect_mutex_;
 };
+}

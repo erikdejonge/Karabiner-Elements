@@ -8,10 +8,7 @@ PATH="/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:$GEM_HOME/bin"; export PATH
 version=$(cat version)
 
 echo "make build"
-make build | ruby scripts/reduce-logs.rb
-if [ ${PIPESTATUS[0]} -ne 0 ]; then
-    exit 99
-fi
+ruby scripts/reduce-logs.rb 'make build' || exit 99
 
 # --------------------------------------------------
 echo "Copy Files"
@@ -21,15 +18,18 @@ mkdir -p pkgroot
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements"
 mkdir -p "$basedir"
+cp version "$basedir"
 cp src/scripts/uninstaller.applescript "$basedir"
 cp src/scripts/uninstall.sh "$basedir"
 cp src/scripts/uninstall_core.sh "$basedir/uninstall_core.sh"
 cp -R "src/vendor/Karabiner-VirtualHIDDevice/dist" "$basedir/Karabiner-VirtualHIDDevice"
+cp -R "src/apps/Menu/build/Release/Karabiner-Menu.app" "$basedir"
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements/bin"
 mkdir -p "$basedir"
-cp src/core/grabber/build/Release/karabiner_grabber "$basedir"
+cp src/bin/cli/build/Release/karabiner_cli "$basedir"
 cp src/core/console_user_server/build/Release/karabiner_console_user_server "$basedir"
+cp src/core/grabber/build/Release/karabiner_grabber "$basedir"
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements/updater"
 mkdir -p "$basedir"

@@ -1,0 +1,317 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 47;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		3404CB781E3E3C7100629451 /* update_utility.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 3404CB771E3E3C7100629451 /* update_utility.hpp */; };
+		3404CB7A1E3E430000629451 /* launchctl_utility.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 3404CB791E3E430000629451 /* launchctl_utility.hpp */; };
+		3404CB7C1E3E5B2000629451 /* application_launcher.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 3404CB7B1E3E5B2000629451 /* application_launcher.hpp */; };
+		340C7F6A1E4253CA00F9B911 /* process_utility.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 340C7F691E4253CA00F9B911 /* process_utility.hpp */; };
+		340C7F6C1E4253DF00F9B911 /* filesystem.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 340C7F6B1E4253DF00F9B911 /* filesystem.hpp */; };
+		342853041DCB850200164476 /* libkrbn_system_preferences_monitor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 342853031DCB850200164476 /* libkrbn_system_preferences_monitor.cpp */; };
+		342853071DCB851B00164476 /* system_preferences_monitor.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 342853051DCB851B00164476 /* system_preferences_monitor.hpp */; };
+		342853081DCB851B00164476 /* system_preferences.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 342853061DCB851B00164476 /* system_preferences.hpp */; };
+		3457BEED1E54B42D00B6A620 /* libkrbn_configuration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3457BEEC1E54B42D00B6A620 /* libkrbn_configuration.cpp */; };
+		345F95391DA2ADC8002854B8 /* libkrbn_log_monitor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 345F95381DA2ADC8002854B8 /* libkrbn_log_monitor.cpp */; };
+		345F953B1DA2AE3F002854B8 /* libkrbn.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 345F953A1DA2AE3F002854B8 /* libkrbn.hpp */; };
+		345F95421DA934C6002854B8 /* core_configuration.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 345F95411DA934C6002854B8 /* core_configuration.hpp */; };
+		346FC7FF1E3F8C2E0090B203 /* libkrbn_version_monitor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 346FC7FE1E3F8C2E0090B203 /* libkrbn_version_monitor.cpp */; };
+		346FC8011E3F8CAD0090B203 /* version_monitor.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 346FC8001E3F8CAD0090B203 /* version_monitor.hpp */; };
+		347113051D8704B7001AC60D /* libkrbn.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 347113031D8704B7001AC60D /* libkrbn.cpp */; };
+		347113081D870834001AC60D /* libkrbn.h in Headers */ = {isa = PBXBuildFile; fileRef = 347113071D870834001AC60D /* libkrbn.h */; };
+		3471130C1D87092D001AC60D /* constants.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 3471130B1D87092D001AC60D /* constants.hpp */; };
+		3476862E1E22A9F400A7DFAB /* cf_utility.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 3476862D1E22A9F400A7DFAB /* cf_utility.hpp */; };
+		34B97B101DB8D2F600EB3583 /* thread_utility.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 34B97B0F1DB8D2F600EB3583 /* thread_utility.hpp */; };
+		34B97B241DBB2C4700EB3583 /* types.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 34B97B231DBB2C4700EB3583 /* types.hpp */; };
+		34B97B271DBB2C5A00EB3583 /* boost_defs.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 34B97B261DBB2C5A00EB3583 /* boost_defs.hpp */; };
+		34B97B2C1DBCD2CB00EB3583 /* libkrbn_device_monitor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 34B97B2B1DBCD2CB00EB3583 /* libkrbn_device_monitor.cpp */; };
+		34CFEC6F1D9663E0004C61E1 /* file_monitor.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 34CFEC6E1D9663E0004C61E1 /* file_monitor.hpp */; };
+		34CFEC711D9663EC004C61E1 /* log_monitor.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 34CFEC701D9663EC004C61E1 /* log_monitor.hpp */; };
+		34CFEC731D9663F6004C61E1 /* spdlog_utility.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 34CFEC721D9663F6004C61E1 /* spdlog_utility.hpp */; };
+		34F4D5191E672758007D5065 /* configuration_monitor.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 34F4D5181E672758007D5065 /* configuration_monitor.hpp */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		3404CB771E3E3C7100629451 /* update_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = update_utility.hpp; path = ../../share/update_utility.hpp; sourceTree = SOURCE_ROOT; };
+		3404CB791E3E430000629451 /* launchctl_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = launchctl_utility.hpp; path = ../../share/launchctl_utility.hpp; sourceTree = SOURCE_ROOT; };
+		3404CB7B1E3E5B2000629451 /* application_launcher.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = application_launcher.hpp; path = ../../share/application_launcher.hpp; sourceTree = SOURCE_ROOT; };
+		340C7F691E4253CA00F9B911 /* process_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = process_utility.hpp; path = ../../share/process_utility.hpp; sourceTree = SOURCE_ROOT; };
+		340C7F6B1E4253DF00F9B911 /* filesystem.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = filesystem.hpp; path = ../../share/filesystem.hpp; sourceTree = SOURCE_ROOT; };
+		342853031DCB850200164476 /* libkrbn_system_preferences_monitor.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = libkrbn_system_preferences_monitor.cpp; sourceTree = "<group>"; };
+		342853051DCB851B00164476 /* system_preferences_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = system_preferences_monitor.hpp; path = ../../share/system_preferences_monitor.hpp; sourceTree = "<group>"; };
+		342853061DCB851B00164476 /* system_preferences.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = system_preferences.hpp; path = ../../share/system_preferences.hpp; sourceTree = "<group>"; };
+		3457BEEC1E54B42D00B6A620 /* libkrbn_configuration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = libkrbn_configuration.cpp; sourceTree = "<group>"; };
+		345F95381DA2ADC8002854B8 /* libkrbn_log_monitor.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = libkrbn_log_monitor.cpp; sourceTree = "<group>"; };
+		345F953A1DA2AE3F002854B8 /* libkrbn.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = libkrbn.hpp; sourceTree = "<group>"; };
+		345F95411DA934C6002854B8 /* core_configuration.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = core_configuration.hpp; path = ../../share/core_configuration.hpp; sourceTree = "<group>"; };
+		346FC7FE1E3F8C2E0090B203 /* libkrbn_version_monitor.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = libkrbn_version_monitor.cpp; sourceTree = "<group>"; };
+		346FC8001E3F8CAD0090B203 /* version_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = version_monitor.hpp; path = ../../share/version_monitor.hpp; sourceTree = "<group>"; };
+		347112FB1D8703F3001AC60D /* libkrbn.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libkrbn.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		347113031D8704B7001AC60D /* libkrbn.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = libkrbn.cpp; sourceTree = "<group>"; };
+		347113071D870834001AC60D /* libkrbn.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = libkrbn.h; sourceTree = "<group>"; };
+		3471130B1D87092D001AC60D /* constants.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = constants.hpp; path = ../../share/constants.hpp; sourceTree = "<group>"; };
+		3476862D1E22A9F400A7DFAB /* cf_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = cf_utility.hpp; path = ../../share/cf_utility.hpp; sourceTree = "<group>"; };
+		34B97B0F1DB8D2F600EB3583 /* thread_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = thread_utility.hpp; path = ../../share/thread_utility.hpp; sourceTree = "<group>"; };
+		34B97B231DBB2C4700EB3583 /* types.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = types.hpp; path = ../../share/types.hpp; sourceTree = "<group>"; };
+		34B97B261DBB2C5A00EB3583 /* boost_defs.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = boost_defs.hpp; path = ../../share/boost_defs.hpp; sourceTree = "<group>"; };
+		34B97B2B1DBCD2CB00EB3583 /* libkrbn_device_monitor.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = libkrbn_device_monitor.cpp; sourceTree = "<group>"; };
+		34CFEC6E1D9663E0004C61E1 /* file_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = file_monitor.hpp; path = ../../share/file_monitor.hpp; sourceTree = "<group>"; };
+		34CFEC701D9663EC004C61E1 /* log_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = log_monitor.hpp; path = ../../share/log_monitor.hpp; sourceTree = "<group>"; };
+		34CFEC721D9663F6004C61E1 /* spdlog_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = spdlog_utility.hpp; path = ../../share/spdlog_utility.hpp; sourceTree = "<group>"; };
+		34F4D5181E672758007D5065 /* configuration_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = configuration_monitor.hpp; path = ../../share/configuration_monitor.hpp; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		347112F81D8703F3001AC60D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		347112F21D8703F3001AC60D = {
+			isa = PBXGroup;
+			children = (
+				347113021D8704A4001AC60D /* Sources */,
+				347112FC1D8703F3001AC60D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		347112FC1D8703F3001AC60D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				347112FB1D8703F3001AC60D /* libkrbn.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		347113021D8704A4001AC60D /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				3457BEEC1E54B42D00B6A620 /* libkrbn_configuration.cpp */,
+				34B97B2B1DBCD2CB00EB3583 /* libkrbn_device_monitor.cpp */,
+				345F95381DA2ADC8002854B8 /* libkrbn_log_monitor.cpp */,
+				342853031DCB850200164476 /* libkrbn_system_preferences_monitor.cpp */,
+				346FC7FE1E3F8C2E0090B203 /* libkrbn_version_monitor.cpp */,
+				347113031D8704B7001AC60D /* libkrbn.cpp */,
+				347113071D870834001AC60D /* libkrbn.h */,
+				345F953A1DA2AE3F002854B8 /* libkrbn.hpp */,
+				347113091D87091F001AC60D /* share */,
+			);
+			name = Sources;
+			sourceTree = "<group>";
+		};
+		347113091D87091F001AC60D /* share */ = {
+			isa = PBXGroup;
+			children = (
+				3404CB7B1E3E5B2000629451 /* application_launcher.hpp */,
+				34B97B261DBB2C5A00EB3583 /* boost_defs.hpp */,
+				3476862D1E22A9F400A7DFAB /* cf_utility.hpp */,
+				34F4D5181E672758007D5065 /* configuration_monitor.hpp */,
+				3471130B1D87092D001AC60D /* constants.hpp */,
+				345F95411DA934C6002854B8 /* core_configuration.hpp */,
+				34CFEC6E1D9663E0004C61E1 /* file_monitor.hpp */,
+				340C7F6B1E4253DF00F9B911 /* filesystem.hpp */,
+				3404CB791E3E430000629451 /* launchctl_utility.hpp */,
+				34CFEC701D9663EC004C61E1 /* log_monitor.hpp */,
+				340C7F691E4253CA00F9B911 /* process_utility.hpp */,
+				34CFEC721D9663F6004C61E1 /* spdlog_utility.hpp */,
+				342853051DCB851B00164476 /* system_preferences_monitor.hpp */,
+				342853061DCB851B00164476 /* system_preferences.hpp */,
+				34B97B0F1DB8D2F600EB3583 /* thread_utility.hpp */,
+				34B97B231DBB2C4700EB3583 /* types.hpp */,
+				3404CB771E3E3C7100629451 /* update_utility.hpp */,
+				346FC8001E3F8CAD0090B203 /* version_monitor.hpp */,
+			);
+			name = share;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		347112F91D8703F3001AC60D /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3471130C1D87092D001AC60D /* constants.hpp in Headers */,
+				345F953B1DA2AE3F002854B8 /* libkrbn.hpp in Headers */,
+				34CFEC731D9663F6004C61E1 /* spdlog_utility.hpp in Headers */,
+				3404CB7C1E3E5B2000629451 /* application_launcher.hpp in Headers */,
+				34B97B101DB8D2F600EB3583 /* thread_utility.hpp in Headers */,
+				34B97B271DBB2C5A00EB3583 /* boost_defs.hpp in Headers */,
+				34F4D5191E672758007D5065 /* configuration_monitor.hpp in Headers */,
+				347113081D870834001AC60D /* libkrbn.h in Headers */,
+				340C7F6A1E4253CA00F9B911 /* process_utility.hpp in Headers */,
+				345F95421DA934C6002854B8 /* core_configuration.hpp in Headers */,
+				34CFEC711D9663EC004C61E1 /* log_monitor.hpp in Headers */,
+				346FC8011E3F8CAD0090B203 /* version_monitor.hpp in Headers */,
+				3404CB781E3E3C7100629451 /* update_utility.hpp in Headers */,
+				34CFEC6F1D9663E0004C61E1 /* file_monitor.hpp in Headers */,
+				342853071DCB851B00164476 /* system_preferences_monitor.hpp in Headers */,
+				3404CB7A1E3E430000629451 /* launchctl_utility.hpp in Headers */,
+				342853081DCB851B00164476 /* system_preferences.hpp in Headers */,
+				34B97B241DBB2C4700EB3583 /* types.hpp in Headers */,
+				340C7F6C1E4253DF00F9B911 /* filesystem.hpp in Headers */,
+				3476862E1E22A9F400A7DFAB /* cf_utility.hpp in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		347112FA1D8703F3001AC60D /* libkrbn */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 347112FF1D8703F3001AC60D /* Build configuration list for PBXNativeTarget "libkrbn" */;
+			buildPhases = (
+				347112F71D8703F3001AC60D /* Sources */,
+				347112F81D8703F3001AC60D /* Frameworks */,
+				347112F91D8703F3001AC60D /* Headers */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = libkrbn;
+			productName = libkrbn;
+			productReference = 347112FB1D8703F3001AC60D /* libkrbn.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		347112F31D8703F3001AC60D /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0800;
+				TargetAttributes = {
+					347112FA1D8703F3001AC60D = {
+						CreatedOnToolsVersion = 7.3.1;
+					};
+				};
+			};
+			buildConfigurationList = 347112F61D8703F3001AC60D /* Build configuration list for PBXProject "libkrbn" */;
+			compatibilityVersion = "Xcode 6.3";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 347112F21D8703F3001AC60D;
+			productRefGroup = 347112FC1D8703F3001AC60D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				347112FA1D8703F3001AC60D /* libkrbn */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		347112F71D8703F3001AC60D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3457BEED1E54B42D00B6A620 /* libkrbn_configuration.cpp in Sources */,
+				346FC7FF1E3F8C2E0090B203 /* libkrbn_version_monitor.cpp in Sources */,
+				34B97B2C1DBCD2CB00EB3583 /* libkrbn_device_monitor.cpp in Sources */,
+				342853041DCB850200164476 /* libkrbn_system_preferences_monitor.cpp in Sources */,
+				345F95391DA2ADC8002854B8 /* libkrbn_log_monitor.cpp in Sources */,
+				347113051D8704B7001AC60D /* libkrbn.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		347112FE1D8703F3001AC60D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
+				GCC_WARN_MISSING_PARENTHESES = YES;
+				GCC_WARN_NON_VIRTUAL_DESTRUCTOR = YES;
+				GCC_WARN_SHADOW = YES;
+				GCC_WARN_SIGN_COMPARE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_LABEL = YES;
+				GCC_WARN_UNUSED_VALUE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = (
+					../../vendor,
+					/opt/local/include,
+					/usr/local/include,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				RUN_CLANG_STATIC_ANALYZER = YES;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		347113011D8703F3001AC60D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = lib;
+				PRODUCT_NAME = krbn;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		347112F61D8703F3001AC60D /* Build configuration list for PBXProject "libkrbn" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				347112FE1D8703F3001AC60D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		347112FF1D8703F3001AC60D /* Build configuration list for PBXNativeTarget "libkrbn" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				347113011D8703F3001AC60D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 347112F31D8703F3001AC60D /* Project object */;
+}

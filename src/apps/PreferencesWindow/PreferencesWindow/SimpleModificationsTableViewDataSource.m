@@ -1,16 +1,10 @@
 #import "SimpleModificationsTableViewDataSource.h"
-#import "ConfigurationManager.h"
-
-@interface SimpleModificationsTableViewDataSource ()
-
-@property(weak) IBOutlet ConfigurationManager* configurationManager;
-
-@end
+#import "KarabinerKit/KarabinerKit.h"
 
 @implementation SimpleModificationsTableViewDataSource
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView*)aTableView {
-  return self.configurationManager.configurationCoreModel.simpleModifications.count;
+  return [KarabinerKitConfigurationManager sharedManager].coreConfigurationModel.selectedProfileSimpleModificationsCount;
 }
 
 @end

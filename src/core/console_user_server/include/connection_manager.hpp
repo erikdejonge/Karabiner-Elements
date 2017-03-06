@@ -3,17 +3,20 @@
 #include "configuration_manager.hpp"
 #include "constants.hpp"
 #include "gcd_utility.hpp"
+#include "grabber_client.hpp"
 #include "logger.hpp"
 #include "notification_center.hpp"
 #include "session.hpp"
 #include "system_preferences_monitor.hpp"
+#include "version_monitor.hpp"
 #include <thread>
 
+namespace krbn {
 class connection_manager final {
 public:
   connection_manager(const connection_manager&) = delete;
 
-  connection_manager(void) {
+  connection_manager(version_monitor& version_monitor) : version_monitor_(version_monitor) {
     notification_center::observe_distributed_notification(this,
                                                           static_grabber_is_launched_callback,
                                                           constants::get_distributed_notification_grabber_is_launched());
@@ -21,7 +24,6 @@ public:
     auto current_uid = getuid();
 
     timer_ = std::make_unique<gcd_utility::main_queue_timer>(
-        0,
         dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC),
         1 * NSEC_PER_SEC,
         0,
@@ -30,8 +32,10 @@ public:
             if (current_uid == *uid) {
               try {
                 if (!grabber_client_) {
+                  version_monitor_.manual_check();
+
                   grabber_client_ = std::make_unique<grabber_client>();
-                  grabber_client_->connect(krbn::connect_from::console_user_server);
+                  grabber_client_->connect();
                   logger::get_logger().info("grabber_client_ is connected");
                 }
 
@@ -42,8 +46,7 @@ public:
                 }
 
                 if (!configuration_manager_) {
-                  configuration_manager_ = std::make_unique<configuration_manager>(logger::get_logger(),
-                                                                                   *grabber_client_);
+                  configuration_manager_ = std::make_unique<configuration_manager>(logger::get_logger());
                 }
 
                 return;
@@ -94,9 +97,12 @@ private:
     }
   }
 
+  version_monitor& version_monitor_;
+
   std::unique_ptr<gcd_utility::main_queue_timer> timer_;
 
   std::unique_ptr<configuration_manager> configuration_manager_;
   std::unique_ptr<grabber_client> grabber_client_;
   std::unique_ptr<system_preferences_monitor> system_preferences_monitor_;
 };
+}

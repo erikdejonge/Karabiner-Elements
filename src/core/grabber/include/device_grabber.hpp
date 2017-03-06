@@ -3,6 +3,7 @@
 #include "boost_defs.hpp"
 
 #include "apple_hid_usage_tables.hpp"
+#include "configuration_monitor.hpp"
 #include "constants.hpp"
 #include "event_manipulator.hpp"
 #include "event_tap_manager.hpp"
@@ -20,15 +21,35 @@
 #include <thread>
 #include <time.h>
 
+namespace krbn {
 class device_grabber final {
 public:
   device_grabber(const device_grabber&) = delete;
 
-  device_grabber(manipulator::event_manipulator& event_manipulator) : event_manipulator_(event_manipulator),
-                                                                      event_tap_manager_(std::bind(&device_grabber::caps_lock_state_changed_callback, this, std::placeholders::_1)),
+  device_grabber(virtual_hid_device_client& virtual_hid_device_client,
+                 manipulator::event_manipulator& event_manipulator) : virtual_hid_device_client_(virtual_hid_device_client),
+                                                                      event_manipulator_(event_manipulator),
                                                                       mode_(mode::observing),
                                                                       is_grabbable_callback_log_reducer_(logger::get_logger()),
                                                                       suspended_(false) {
+    virtual_hid_device_client_disconnected_connection = virtual_hid_device_client_.client_disconnected.connect(
+        boost::bind(&device_grabber::virtual_hid_device_client_disconnected_callback, this));
+
+    // macOS 10.12 sometimes synchronize caps lock LED to internal keyboard caps lock state.
+    // The behavior causes LED state mismatch because device_grabber does not change the caps lock state of physical keyboards.
+    // Thus, we monitor the LED state and update it if needed.
+    led_monitor_timer_ = std::make_unique<gcd_utility::main_queue_timer>(
+        dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC),
+        1.0 * NSEC_PER_SEC,
+        0,
+        ^{
+          if (event_tap_manager_) {
+            if (auto state = event_tap_manager_->get_caps_lock_state()) {
+              update_caps_lock_led(*state);
+            }
+          }
+        });
+
     manager_ = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
     if (!manager_) {
       logger::get_logger().error("{0}: failed to IOHIDManagerCreate", __PRETTY_FUNCTION__);
@@ -61,24 +82,47 @@ public:
         CFRelease(manager_);
         manager_ = nullptr;
       }
+
+      led_monitor_timer_ = nullptr;
+
+      virtual_hid_device_client_disconnected_connection.disconnect();
     });
   }
 
-  void start_grabbing(void) {
+  void start_grabbing(const std::string& user_core_configuration_file_path) {
     gcd_utility::dispatch_sync_in_main_queue(^{
       mode_ = mode::grabbing;
 
       event_manipulator_.reset();
+
+      // We should call CGEventTapCreate after user is logged in.
+      // So, we create event_tap_manager here.
+      event_tap_manager_ = std::make_unique<event_tap_manager>(std::bind(&device_grabber::caps_lock_state_changed_callback, this, std::placeholders::_1));
+
+      configuration_monitor_ = std::make_unique<configuration_monitor>(logger::get_logger(),
+                                                                       user_core_configuration_file_path,
+                                                                       [this](std::shared_ptr<core_configuration> core_configuration) {
+                                                                         core_configuration_ = core_configuration;
+
+                                                                         is_grabbable_callback_log_reducer_.reset();
+                                                                         event_manipulator_.set_profile(core_configuration_->get_selected_profile());
+                                                                         grab_devices();
+                                                                         output_devices_json();
+                                                                       });
     });
   }
 
   void stop_grabbing(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
+      configuration_monitor_ = nullptr;
+
       ungrab_devices();
 
       mode_ = mode::observing;
 
       event_manipulator_.reset();
+
+      event_tap_manager_ = nullptr;
     });
   }
 
@@ -134,36 +178,15 @@ public:
     });
   }
 
-  void clear_device_configurations(void) {
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      device_configurations_.clear();
-    });
-  }
-
-  void add_device_configuration(const krbn::device_identifiers_struct& device_identifiers_struct,
-                                const krbn::device_configuration_struct& device_configuration_struct) {
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      device_configurations_.push_back(std::make_pair(device_identifiers_struct, device_configuration_struct));
-    });
-  }
-
-  void complete_device_configurations(void) {
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      for (auto&& it : hids_) {
-        (it.second)->set_keyboard_type(get_keyboard_type(*(it.second)));
-        (it.second)->set_disable_built_in_keyboard_if_exists(get_disable_built_in_keyboard_if_exists(*(it.second)));
-      }
-
-      grab_devices();
-      output_devices_json();
-    });
-  }
-
 private:
   enum class mode {
     observing,
     grabbing,
   };
+
+  void virtual_hid_device_client_disconnected_callback(void) {
+    stop_grabbing();
+  }
 
   static void static_device_matching_callback(void* _Nullable context, IOReturn result, void* _Nullable sender, IOHIDDeviceRef _Nonnull device) {
     if (result != kIOReturnSuccess) {
@@ -186,7 +209,6 @@ private:
     iokit_utility::log_matching_device(logger::get_logger(), device);
 
     auto dev = std::make_unique<human_interface_device>(logger::get_logger(), device);
-    dev->set_keyboard_type(get_keyboard_type(*dev));
     dev->set_disable_built_in_keyboard_if_exists(get_disable_built_in_keyboard_if_exists(*dev));
     dev->set_is_grabbable_callback(std::bind(&device_grabber::is_grabbable_callback, this, std::placeholders::_1));
     dev->set_grabbed_callback(std::bind(&device_grabber::grabbed_callback, this, std::placeholders::_1));
@@ -273,14 +295,19 @@ private:
     }
 
     auto device_registry_entry_id = manipulator::device_registry_entry_id(device.get_registry_entry_id());
+    auto timestamp = IOHIDValueGetTimeStamp(value);
 
-    if (auto key_code = krbn::types::get_key_code(usage_page, usage)) {
+    if (auto key_code = types::get_key_code(usage_page, usage)) {
       bool pressed = integer_value;
-      event_manipulator_.handle_keyboard_event(device_registry_entry_id, *key_code, device.get_keyboard_type(), pressed);
+      event_manipulator_.handle_keyboard_event(device_registry_entry_id,
+                                               timestamp,
+                                               *key_code,
+                                               pressed);
 
-    } else if (auto pointing_button = krbn::types::get_pointing_button(usage_page, usage)) {
+    } else if (auto pointing_button = types::get_pointing_button(usage_page, usage)) {
       event_manipulator_.handle_pointing_event(device_registry_entry_id,
-                                               krbn::pointing_event::button,
+                                               timestamp,
+                                               pointing_event::button,
                                                *pointing_button,
                                                integer_value);
 
@@ -289,19 +316,22 @@ private:
       case kHIDPage_GenericDesktop:
         if (usage == kHIDUsage_GD_X) {
           event_manipulator_.handle_pointing_event(device_registry_entry_id,
-                                                   krbn::pointing_event::x,
+                                                   timestamp,
+                                                   pointing_event::x,
                                                    boost::none,
                                                    integer_value);
         }
         if (usage == kHIDUsage_GD_Y) {
           event_manipulator_.handle_pointing_event(device_registry_entry_id,
-                                                   krbn::pointing_event::y,
+                                                   timestamp,
+                                                   pointing_event::y,
                                                    boost::none,
                                                    integer_value);
         }
         if (usage == kHIDUsage_GD_Wheel) {
           event_manipulator_.handle_pointing_event(device_registry_entry_id,
-                                                   krbn::pointing_event::vertical_wheel,
+                                                   timestamp,
+                                                   pointing_event::vertical_wheel,
                                                    boost::none,
                                                    integer_value);
         }
@@ -310,7 +340,8 @@ private:
       case kHIDPage_Consumer:
         if (usage == kHIDUsage_Csmr_ACPan) {
           event_manipulator_.handle_pointing_event(device_registry_entry_id,
-                                                   krbn::pointing_event::horizontal_wheel,
+                                                   timestamp,
+                                                   pointing_event::horizontal_wheel,
                                                    boost::none,
                                                    integer_value);
         }
@@ -349,6 +380,9 @@ private:
       case manipulator::event_manipulator::ready_state::virtual_hid_device_client_is_not_ready:
         message += "(virtual_hid_device_client is not ready) ";
         break;
+      case manipulator::event_manipulator::ready_state::virtual_hid_keyboard_is_not_ready:
+        message += "(virtual_hid_keyboard is not ready) ";
+        break;
       }
       message += "Please wait for a while.";
       is_grabbable_callback_log_reducer_.warn(message);
@@ -359,7 +393,13 @@ private:
 
   void grabbed_callback(human_interface_device& device) {
     // set keyboard led
-    caps_lock_state_changed_callback(event_tap_manager_.get_caps_lock_state());
+    if (event_tap_manager_) {
+      bool state = false;
+      if (auto s = event_tap_manager_->get_caps_lock_state()) {
+        state = *s;
+      }
+      update_caps_lock_led(state);
+    }
   }
 
   void ungrabbed_callback(human_interface_device& device) {
@@ -374,11 +414,14 @@ private:
 
   void caps_lock_state_changed_callback(bool caps_lock_state) {
     event_manipulator_.set_caps_lock_state(caps_lock_state);
+    update_caps_lock_led(caps_lock_state);
+  }
 
+  void update_caps_lock_led(bool caps_lock_state) {
     // Update LED.
     for (const auto& it : hids_) {
       if ((it.second)->is_grabbed()) {
-        (it.second)->set_caps_lock_led_state(caps_lock_state ? krbn::led_state::on : krbn::led_state::off);
+        (it.second)->set_caps_lock_led_state(caps_lock_state ? led_state::on : led_state::off);
       }
     }
   }
@@ -409,18 +452,22 @@ private:
     return false;
   }
 
-  boost::optional<const krbn::device_configuration_struct&> find_device_configuration_struct(const human_interface_device& device) {
-    if (auto vendor_id = device.get_vendor_id()) {
-      if (auto product_id = device.get_product_id()) {
-        bool is_keyboard = device.is_keyboard();
-        bool is_pointing_device = device.is_pointing_device();
+  boost::optional<const core_configuration::profile::device&> find_device_configuration(const human_interface_device& device) {
+    if (core_configuration_) {
+      if (auto vendor_id = device.get_vendor_id()) {
+        if (auto product_id = device.get_product_id()) {
+          bool is_keyboard = device.is_keyboard();
+          bool is_pointing_device = device.is_pointing_device();
 
-        for (const auto& d : device_configurations_) {
-          if (d.first.vendor_id == *vendor_id &&
-              d.first.product_id == *product_id &&
-              d.first.is_keyboard == is_keyboard &&
-              d.first.is_pointing_device == is_pointing_device) {
-            return d.second;
+          core_configuration::profile::device::identifiers identifiers(*vendor_id,
+                                                                       *product_id,
+                                                                       is_keyboard,
+                                                                       is_pointing_device);
+
+          for (const auto& d : core_configuration_->get_selected_profile().get_devices()) {
+            if (d.get_identifiers() == identifiers) {
+              return d;
+            }
           }
         }
       }
@@ -429,18 +476,18 @@ private:
   }
 
   bool is_ignored_device(const human_interface_device& device) {
-    if (auto s = find_device_configuration_struct(device)) {
-      return s->ignore;
+    if (auto s = find_device_configuration(device)) {
+      return s->get_ignore();
     }
 
     if (device.is_pointing_device()) {
       return true;
     }
 
-    if (auto vendor_id = device.get_vendor_id()) {
-      if (auto product_id = device.get_product_id()) {
+    if (auto v = device.get_vendor_id()) {
+      if (auto p = device.get_product_id()) {
         // Touch Bar on MacBook Pro 2016
-        if (*vendor_id == krbn::vendor_id(0x05ac) && *product_id == krbn::product_id(0x8600)) {
+        if (*v == vendor_id(0x05ac) && *p == product_id(0x8600)) {
           return true;
         }
       }
@@ -449,16 +496,9 @@ private:
     return false;
   }
 
-  krbn::keyboard_type get_keyboard_type(const human_interface_device& device) {
-    if (auto s = find_device_configuration_struct(device)) {
-      return s->keyboard_type;
-    }
-    return krbn::keyboard_type::none;
-  }
-
   bool get_disable_built_in_keyboard_if_exists(const human_interface_device& device) {
-    if (auto s = find_device_configuration_struct(device)) {
-      return s->disable_built_in_keyboard_if_exists;
+    if (auto s = find_device_configuration(device)) {
+      return s->get_disable_built_in_keyboard_if_exists();
     }
     return false;
   }
@@ -532,14 +572,20 @@ private:
     }
   }
 
+  virtual_hid_device_client& virtual_hid_device_client_;
   manipulator::event_manipulator& event_manipulator_;
 
-  event_tap_manager event_tap_manager_;
+  boost::signals2::connection virtual_hid_device_client_disconnected_connection;
+
+  std::unique_ptr<configuration_monitor> configuration_monitor_;
+  std::shared_ptr<core_configuration> core_configuration_;
+
+  std::unique_ptr<event_tap_manager> event_tap_manager_;
   IOHIDManagerRef _Nullable manager_;
 
-  std::vector<std::pair<krbn::device_identifiers_struct, krbn::device_configuration_struct>> device_configurations_;
-
   std::unordered_map<IOHIDDeviceRef, std::unique_ptr<human_interface_device>> hids_;
+
+  std::unique_ptr<gcd_utility::main_queue_timer> led_monitor_timer_;
 
   mode mode_;
 
@@ -547,3 +593,4 @@ private:
 
   bool suspended_;
 };
+}
