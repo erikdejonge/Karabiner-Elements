@@ -1,5 +1,6 @@
 #include "boost_defs.hpp"
 
+#include "../include/logger.hpp"
 #include "human_interface_device.hpp"
 #include "iokit_utility.hpp"
 #include <CoreFoundation/CoreFoundation.h>
@@ -16,17 +17,6 @@
 #include <mach/mach_time.h>
 
 namespace {
-class logger final {
-public:
-  static spdlog::logger& get_logger(void) {
-    static std::shared_ptr<spdlog::logger> logger;
-    if (!logger) {
-      logger = spdlog::stdout_logger_mt("dump_hid_report", true);
-    }
-    return *logger;
-  }
-};
-
 class dump_hid_report final {
 public:
   dump_hid_report(const dump_hid_report&) = delete;
@@ -38,9 +28,9 @@ public:
     }
 
     auto device_matching_dictionaries = krbn::iokit_utility::create_device_matching_dictionaries({
-        std::make_pair(kHIDPage_GenericDesktop, kHIDUsage_GD_Keyboard),
-        std::make_pair(kHIDPage_GenericDesktop, kHIDUsage_GD_Mouse),
-        std::make_pair(kHIDPage_GenericDesktop, kHIDUsage_GD_Pointer),
+        std::make_pair(krbn::hid_usage_page::generic_desktop, krbn::hid_usage::gd_keyboard),
+        std::make_pair(krbn::hid_usage_page::generic_desktop, krbn::hid_usage::gd_mouse),
+        std::make_pair(krbn::hid_usage_page::generic_desktop, krbn::hid_usage::gd_pointer),
     });
     if (device_matching_dictionaries) {
       IOHIDManagerSetDeviceMatchingMultiple(manager_, device_matching_dictionaries);
@@ -137,7 +127,7 @@ private:
   IOHIDManagerRef _Nullable manager_;
   std::unordered_map<IOHIDDeviceRef, std::unique_ptr<krbn::human_interface_device>> hids_;
 };
-}
+} // namespace
 
 int main(int argc, const char* argv[]) {
   krbn::thread_utility::register_main_thread();

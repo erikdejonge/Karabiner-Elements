@@ -1,3 +1,4 @@
+#include "../include/logger.hpp"
 #include "thread_utility.hpp"
 #include <CoreGraphics/CoreGraphics.h>
 #include <iostream>
@@ -10,29 +11,18 @@ CGEventRef callback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, v
   std::cout << "CGEventGetFlags 0x" << std::hex << CGEventGetFlags(event) << std::dec << std::endl;
 
   switch (type) {
-  case kCGEventKeyDown:
-    std::cout << "kCGEventKeyDown" << std::endl;
-    break;
-  case kCGEventKeyUp:
-    std::cout << "kCGEventKeyUp" << std::endl;
-  default:
-    std::cout << "callback:" << type << std::endl;
-    break;
+    case kCGEventKeyDown:
+      std::cout << "kCGEventKeyDown" << std::endl;
+      break;
+    case kCGEventKeyUp:
+      std::cout << "kCGEventKeyUp" << std::endl;
+    default:
+      std::cout << "callback:" << type << std::endl;
+      break;
   }
   return event;
 }
-}
-
-class logger final {
-public:
-  static spdlog::logger& get_logger(void) {
-    static std::shared_ptr<spdlog::logger> logger;
-    if (!logger) {
-      logger = spdlog::stdout_logger_mt("eventtap", true);
-    }
-    return *logger;
-  }
-};
+} // namespace
 
 int main(int argc, const char* argv[]) {
   krbn::thread_utility::register_main_thread();

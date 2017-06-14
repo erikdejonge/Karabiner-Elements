@@ -1,6 +1,5 @@
 #pragma once
 
-#include "file_monitor.hpp"
 #include "filesystem.hpp"
 #include "gcd_utility.hpp"
 #include "spdlog_utility.hpp"
@@ -27,10 +26,10 @@ public:
     // setup initial_lines_
 
     for (const auto& target : targets) {
-      add_initial_lines(target + ".1.txt");
-      add_initial_lines(target + ".txt");
+      add_initial_lines(target + ".1");
+      add_initial_lines(target);
 
-      files_.push_back(target + ".txt");
+      files_.push_back(target);
     }
   }
 
@@ -186,4 +185,4 @@ private:
   std::vector<std::string> files_;
   std::deque<std::tuple<timer_count, uint64_t, std::string>> added_lines_;
 };
-}
+} // namespace krbn

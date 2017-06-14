@@ -8,13 +8,13 @@ namespace {
 void new_log_line_callback(const std::string& line) {
   std::cout << line << std::endl;
 }
-}
+} // namespace
 
 int main(int argc, const char* argv[]) {
   krbn::thread_utility::register_main_thread();
 
   std::vector<std::string> targets = {
-      "/var/log/karabiner/grabber_log",
+      "/var/log/karabiner/grabber.log",
   };
   log_monitor monitor(targets, new_log_line_callback);
 

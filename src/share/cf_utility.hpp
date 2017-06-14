@@ -9,6 +9,17 @@
 namespace krbn {
 class cf_utility final {
 public:
+  template <typename T>
+  class deleter final {
+  public:
+    using pointer = T;
+    void operator()(T _Nullable ref) {
+      if (ref) {
+        CFRelease(ref);
+      }
+    }
+  };
+
   static boost::optional<std::string> to_string(CFTypeRef _Nullable value) {
     if (!value) {
       return boost::none;
@@ -35,5 +46,39 @@ public:
 
     return string;
   }
+
+  static CFArrayRef _Nonnull create_empty_cfarray(void) {
+    return CFArrayCreate(nullptr, nullptr, 0, &kCFTypeArrayCallBacks);
+  }
+
+  static CFMutableArrayRef _Nonnull create_cfmutablearray(CFIndex capacity = 0) {
+    return CFArrayCreateMutable(nullptr, capacity, &kCFTypeArrayCallBacks);
+  }
+
+  template <typename T>
+  static T _Nullable get_value(CFArrayRef _Nonnull array, CFIndex index) {
+    if (array && index < CFArrayGetCount(array)) {
+      return static_cast<T>(const_cast<void*>(CFArrayGetValueAtIndex(array, index)));
+    }
+    return nullptr;
+  }
+
+  template <typename T>
+  static bool exists(CFArrayRef _Nonnull array, T _Nonnull value) {
+    if (array) {
+      CFRange range = {0, CFArrayGetCount(array)};
+      if (CFArrayContainsValue(array, range, value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static CFMutableDictionaryRef _Nonnull create_cfmutabledictionary(CFIndex capacity = 0) {
+    return CFDictionaryCreateMutable(nullptr,
+                                     capacity,
+                                     &kCFTypeDictionaryKeyCallBacks,
+                                     &kCFTypeDictionaryValueCallBacks);
+  }
 };
-}
+} // namespace krbn

@@ -34,7 +34,7 @@ public:
                 if (!grabber_client_) {
                   version_monitor_.manual_check();
 
-                  grabber_client_ = std::make_unique<grabber_client>();
+                  grabber_client_ = std::make_unique<grabber_client>(logger::get_logger());
                   grabber_client_->connect();
                   logger::get_logger().info("grabber_client_ is connected");
                 }
@@ -105,4 +105,4 @@ private:
   std::unique_ptr<grabber_client> grabber_client_;
   std::unique_ptr<system_preferences_monitor> system_preferences_monitor_;
 };
-}
+} // namespace krbn

@@ -3,6 +3,10 @@
 #include "boost_defs.hpp"
 
 #include "apple_hid_usage_tables.hpp"
+#include "cf_utility.hpp"
+#include "connected_devices.hpp"
+#include "core_configuration.hpp"
+#include "event_queue.hpp"
 #include "gcd_utility.hpp"
 #include "iokit_utility.hpp"
 #include "spdlog_utility.hpp"
@@ -32,11 +36,7 @@ public:
   };
 
   typedef std::function<void(human_interface_device& device,
-                             IOHIDValueRef _Nonnull value,
-                             IOHIDElementRef _Nonnull element,
-                             uint32_t usage_page,
-                             uint32_t usage,
-                             CFIndex integer_value)>
+                             event_queue& event_queue)>
       value_callback;
 
   typedef std::function<void(human_interface_device& device,
@@ -52,45 +52,119 @@ public:
   typedef std::function<void(human_interface_device& device)> ungrabbed_callback;
   typedef std::function<void(human_interface_device& device)> disabled_callback;
 
+  class keyboard_repeat_detector final {
+  public:
+    void set(key_code key_code, event_type event_type) {
+      if (event_type == event_type::key_down) {
+        if (types::get_modifier_flag(key_code) != modifier_flag::zero) {
+          repeating_key_ = boost::none;
+        } else {
+          repeating_key_ = key_code;
+        }
+
+      } else if (event_type == event_type::key_up) {
+        if (repeating_key_ == key_code) {
+          repeating_key_ = boost::none;
+        }
+      }
+    }
+
+    bool is_repeating(void) const {
+      return repeating_key_ != boost::none;
+    }
+
+  private:
+    boost::optional<key_code> repeating_key_;
+  };
+
   human_interface_device(const human_interface_device&) = delete;
 
   human_interface_device(spdlog::logger& logger,
                          IOHIDDeviceRef _Nonnull device) : logger_(logger),
                                                            device_(device),
-                                                           registry_entry_id_(0),
+                                                           device_id_(types::get_new_device_id()),
                                                            queue_(nullptr),
-                                                           is_grabbable_log_reducer_(logger),
+                                                           is_grabbable_callback_log_reducer_(logger),
+                                                           removed_(false),
                                                            observed_(false),
                                                            grabbed_(false),
-                                                           disabled_(false),
-                                                           is_built_in_keyboard_(false),
-                                                           disable_built_in_keyboard_if_exists_(false) {
+                                                           disabled_(false) {
     // ----------------------------------------
-    // retain device_
+    // Retain device_
 
     CFRetain(device_);
 
-    if (auto registry_entry_id = iokit_utility::get_registry_entry_id(device_)) {
-      registry_entry_id_ = *registry_entry_id;
-    } else {
-      logger_.error("iokit_utility::get_registry_entry_id error @ {0}", __PRETTY_FUNCTION__);
+    // Set name_for_log_
+    {
+      std::stringstream stream;
+
+      if (auto product_name = get_product()) {
+        stream << boost::trim_copy(*product_name);
+      } else {
+        if (auto vendor_id = get_vendor_id()) {
+          if (auto product_id = get_product_id()) {
+            stream << std::hex
+                   << "(vendor_id:0x" << static_cast<uint32_t>(*vendor_id)
+                   << ", product_id:0x" << static_cast<uint32_t>(*product_id)
+                   << ")"
+                   << std::dec;
+          }
+        }
+      }
+
+      stream << " (device_id:" << static_cast<uint32_t>(device_id_) << ")";
+      name_for_log_ = stream.str();
     }
 
-    if (auto product = iokit_utility::get_product(device_)) {
-      if (product->find("Apple Internal ") != std::string::npos) {
-        is_built_in_keyboard_ = true;
+    // Create connected_device_.
+    {
+      std::string manufacturer;
+      std::string product;
+      if (auto m = iokit_utility::get_manufacturer(device_)) {
+        manufacturer = *m;
       }
+      if (auto p = iokit_utility::get_product(device_)) {
+        product = *p;
+      }
+      connected_devices::device::descriptions descriptions(manufacturer, product);
+
+      auto vendor_id = vendor_id::zero;
+      auto product_id = product_id::zero;
+      bool is_keyboard = IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Keyboard);
+      bool is_pointing_device = IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Pointer) ||
+                                IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Mouse);
+      if (auto v = iokit_utility::get_vendor_id(device_)) {
+        vendor_id = *v;
+      }
+      if (auto p = iokit_utility::get_product_id(device_)) {
+        product_id = *p;
+      }
+      core_configuration::profile::device::identifiers identifiers(vendor_id,
+                                                                   product_id,
+                                                                   is_keyboard,
+                                                                   is_pointing_device);
+
+      bool is_built_in_keyboard = false;
+      if (is_keyboard &&
+          !is_pointing_device &&
+          descriptions.get_product().find("Apple Internal ") != std::string::npos) {
+        is_built_in_keyboard = true;
+      }
+
+      connected_device_ = std::make_unique<connected_devices::device>(descriptions,
+                                                                      identifiers,
+                                                                      is_built_in_keyboard);
     }
 
     // ----------------------------------------
-    // setup elements_
+    // Setup elements_
 
     if (auto elements = IOHIDDeviceCopyMatchingElements(device_, nullptr, kIOHIDOptionsTypeNone)) {
       for (CFIndex i = 0; i < CFArrayGetCount(elements); ++i) {
         // Add to elements_.
-        auto element = static_cast<IOHIDElementRef>(const_cast<void*>(CFArrayGetValueAtIndex(elements, i)));
-        auto usage_page = IOHIDElementGetUsagePage(element);
-        auto usage = IOHIDElementGetUsage(element);
+        auto element = cf_utility::get_value<IOHIDElementRef>(elements, i);
+        auto usage_page = hid_usage_page(IOHIDElementGetUsagePage(element));
+        auto usage = hid_usage(IOHIDElementGetUsage(element));
 
         auto key = elements_key(usage_page, usage);
         if (elements_.find(key) == elements_.end()) {
@@ -127,7 +201,7 @@ public:
       close();
 
       // ----------------------------------------
-      // release queue_
+      // Release queue_
 
       if (queue_) {
         CFRelease(queue_);
@@ -135,7 +209,7 @@ public:
       }
 
       // ----------------------------------------
-      // release elements_
+      // Release elements_
 
       for (const auto& it : elements_) {
         CFRelease(it.second);
@@ -143,13 +217,15 @@ public:
       elements_.clear();
 
       // ----------------------------------------
-      // release device_
+      // Release device_
 
       CFRelease(device_);
     });
   }
 
-  uint64_t get_registry_entry_id(void) const { return registry_entry_id_; }
+  device_id get_device_id(void) const {
+    return device_id_;
+  }
 
   IOReturn open(IOOptionBits options = kIOHIDOptionsTypeNone) {
     IOReturn __block r;
@@ -219,9 +295,17 @@ public:
     });
   }
 
+  void set_removed(void) {
+    removed_ = true;
+  }
+
   // High-level utility method.
   void observe(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
+      if (removed_) {
+        return;
+      }
+
       if (is_pqrs_device()) {
         return;
       }
@@ -232,7 +316,7 @@ public:
 
       auto r = open();
       if (r != kIOReturnSuccess) {
-        logger_.error("IOHIDDeviceOpen error: {1} @ {0}", __PRETTY_FUNCTION__, r);
+        logger_.error("IOHIDDeviceOpen error: {0} ({1}) {2}", iokit_utility::get_error_name(r), r, name_for_log_);
         return;
       }
 
@@ -265,6 +349,10 @@ public:
   // High-level utility method.
   void grab(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
+      if (removed_) {
+        return;
+      }
+
       if (is_pqrs_device()) {
         return;
       }
@@ -275,7 +363,7 @@ public:
 
       cancel_grab_timer();
 
-      is_grabbable_log_reducer_.reset();
+      is_grabbable_callback_log_reducer_.reset();
 
       grab_timer_ = std::make_unique<gcd_utility::main_queue_timer>(
           // We have to set an initial wait since OS X will lost the device if we called IOHIDDeviceOpen(kIOHIDOptionsTypeSeizeDevice) in device_matching_callback.
@@ -285,15 +373,15 @@ public:
           0,
           ^{
             switch (is_grabbable()) {
-            case grabbable_state::grabbable:
-              break;
+              case grabbable_state::grabbable:
+                break;
 
-            case grabbable_state::ungrabbable_temporarily:
-              return;
+              case grabbable_state::ungrabbable_temporarily:
+                return;
 
-            case grabbable_state::ungrabbable_permanently:
-              cancel_grab_timer();
-              return;
+              case grabbable_state::ungrabbable_permanently:
+                cancel_grab_timer();
+                return;
             }
 
             // ----------------------------------------
@@ -304,7 +392,7 @@ public:
             // ----------------------------------------
             auto r = open(kIOHIDOptionsTypeSeizeDevice);
             if (r != kIOReturnSuccess) {
-              logger_.error("IOHIDDeviceOpen error: {1} @ {0}", __PRETTY_FUNCTION__, r);
+              logger_.error("IOHIDDeviceOpen error: {0} ({1}) {2}", iokit_utility::get_error_name(r), r, name_for_log_);
               return;
             }
 
@@ -348,6 +436,10 @@ public:
 
       observe();
     });
+  }
+
+  bool get_disabled(void) const {
+    return disabled_;
   }
 
   void disable(void) {
@@ -419,38 +511,7 @@ public:
   }
 
   std::string get_name_for_log(void) const {
-    if (auto product_name = get_product()) {
-      return boost::trim_copy(*product_name);
-    }
-    if (auto vendor_id = get_vendor_id()) {
-      if (auto product_id = get_product_id()) {
-        std::stringstream stream;
-        stream << std::hex
-               << "(vendor_id:0x" << static_cast<uint32_t>(*vendor_id)
-               << ", product_id:0x" << static_cast<uint32_t>(*product_id)
-               << ")"
-               << std::dec;
-        return stream.str();
-      }
-    }
-
-    std::stringstream stream;
-    stream << "(registry_entry_id:" << registry_entry_id_ << ")";
-    return stream.str();
-  }
-
-  size_t get_pressed_keys_count(void) const {
-    size_t __block count = 0;
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      count = pressed_key_usages_.size();
-    });
-    return count;
-  }
-
-  void clear_pressed_keys(void) {
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      pressed_key_usages_.clear();
-    });
+    return name_for_log_;
   }
 
   void set_is_grabbable_callback(const is_grabbable_callback& callback) {
@@ -492,25 +553,26 @@ public:
     }
 
     // ----------------------------------------
-    // We are going to grab the device.
+    // Ungrabbable while key repeating
 
-    if (repeating_key_) {
-      // We should not grab the device while a key is repeating since we cannot stop the key repeating.
-      // (To stop the key repeating, we have to send a hid report to the device. But we cannot do it.)
-
-      is_grabbable_log_reducer_.warn(std::string("We cannot grab ") + get_name_for_log() + " while a key is repeating.");
-      return grabbable_state::ungrabbable_temporarily;
-    }
-
-    if (!pressed_buttons_.empty()) {
-      // We should not grab the device while a button is pressed since we cannot release the button.
-      // (To release the button, we have to send a hid report to the device. But we cannot do it.)
-
-      is_grabbable_log_reducer_.warn(std::string("We cannot grab ") + get_name_for_log() + " while mouse buttons are pressed.");
-      return grabbable_state::ungrabbable_temporarily;
+    if (keyboard_repeat_detector_.is_repeating()) {
+      is_grabbable_callback_log_reducer_.warn(std::string("We cannot grab ") + get_name_for_log() + " while a key is repeating.");
+      return human_interface_device::grabbable_state::ungrabbable_temporarily;
     }
 
     // ----------------------------------------
+    // Ungrabbable while pointing button is pressed.
+
+    if (!pressed_pointing_buttons_.empty()) {
+      // We should not grab the device while a button is pressed since we cannot release the button.
+      // (To release the button, we have to send a hid report to the device. But we cannot do it.)
+
+      is_grabbable_callback_log_reducer_.warn(std::string("We cannot grab ") + get_name_for_log() + " while mouse buttons are pressed.");
+      return human_interface_device::grabbable_state::ungrabbable_temporarily;
+    }
+
+    // ----------------------------------------
+
     return grabbable_state::grabbable;
   }
 
@@ -529,7 +591,7 @@ public:
     boost::optional<led_state> __block state = boost::none;
 
     gcd_utility::dispatch_sync_in_main_queue(^{
-      if (auto element = get_element(kHIDPage_LEDs, kHIDUsage_LED_CapsLock)) {
+      if (auto element = get_element(hid_usage_page::leds, hid_usage::led_caps_lock)) {
         auto max = IOHIDElementGetLogicalMax(element);
 
         IOHIDValueRef value;
@@ -566,7 +628,7 @@ public:
     IOReturn __block r = kIOReturnError;
 
     gcd_utility::dispatch_sync_in_main_queue(^{
-      if (auto element = get_element(kHIDPage_LEDs, kHIDUsage_LED_CapsLock)) {
+      if (auto element = get_element(hid_usage_page::leds, hid_usage::led_caps_lock)) {
         CFIndex integer_value = 0;
         if (state == led_state::on) {
           integer_value = IOHIDElementGetLogicalMax(element);
@@ -592,37 +654,39 @@ public:
     return r;
   }
 
-  bool get_disable_built_in_keyboard_if_exists(void) const {
-    bool __block value;
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      value = disable_built_in_keyboard_if_exists_;
-    });
-    return value;
-  }
-
-  void set_disable_built_in_keyboard_if_exists(bool value) {
-    gcd_utility::dispatch_sync_in_main_queue(^{
-      disable_built_in_keyboard_if_exists_ = value;
-    });
+  const connected_devices::device get_connected_device(void) const {
+    return *connected_device_;
   }
 
   bool is_keyboard(void) const {
-    return IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Keyboard);
+    return connected_device_->get_identifiers().get_is_keyboard();
   }
 
   bool is_pointing_device(void) const {
-    return IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Pointer) ||
-           IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Mouse);
+    return connected_device_->get_identifiers().get_is_pointing_device();
   }
 
   bool is_built_in_keyboard(void) const {
-    return is_built_in_keyboard_;
+    return connected_device_->get_is_built_in_keyboard();
   }
 
   bool is_pqrs_device(void) const {
     if (auto manufacturer = get_manufacturer()) {
       if (*manufacturer == "pqrs.org") {
         return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool is_pqrs_virtual_hid_keyboard(void) const {
+    if (auto manufacturer = get_manufacturer()) {
+      if (auto product = get_product()) {
+        if (*manufacturer == "pqrs.org" &&
+            *product == "Karabiner VirtualHIDKeyboard") {
+          return true;
+        }
       }
     }
 
@@ -644,183 +708,78 @@ private:
   }
 
   void queue_value_available_callback(void) {
-    // We have to separate modifier flags queue and generic queue.
-    //
-    // Some devices are send modifier flag and key at the same report.
-    // For example, a key sends control+up-arrow by this reports.
-    //
-    //   modifiers: 0x0
-    //   keys: 0x0 0x0 0x0 0x0 0x0 0x0
-    //
-    //   modifiers: 0x1
-    //   keys: 0x52 0x0 0x0 0x0 0x0 0x0
-    //
-    // In this case, macOS does not guarantee the value event order to be modifier first.
-    // At least macOS 10.12 or prior sends the up-arrow event first.
-    //
-    //   ----------------------------------------
-    //   Example of hid value events in a single queue at control+up-arrow
-    //
-    //   1. up-arrow keydown
-    //     usage_page:0x7
-    //     usage:0x4f
-    //     integer_value:1
-    //
-    //   2. control keydown
-    //     usage_page:0x7
-    //     usage:0xe1
-    //     integer_value:1
-    //
-    //   3. up-arrow keyup
-    //     usage_page:0x7
-    //     usage:0x4f
-    //     integer_value:0
-    //
-    //   4. control keyup
-    //     usage_page:0x7
-    //     usage:0xe1
-    //     integer_value:0
-    //   ----------------------------------------
-    //
-    // These events will not be interpreted as intended in this order.
-    // Thus, we have to reorder the events.
-
-    std::vector<IOHIDValueRef> retained_values;
-
-    // ----------------------------------------
-    // Drain all values in queue at first.
-
     while (true) {
-      auto value = IOHIDQueueCopyNextValueWithTimeout(queue_, 0.);
-      if (!value) {
+      if (auto value = IOHIDQueueCopyNextValueWithTimeout(queue_, 0.)) {
+        auto element = IOHIDValueGetElement(value);
+        if (element) {
+          auto time_stamp = IOHIDValueGetTimeStamp(value);
+          auto usage_page = hid_usage_page(IOHIDElementGetUsagePage(element));
+          auto usage = hid_usage(IOHIDElementGetUsage(element));
+          auto integer_value = IOHIDValueGetIntegerValue(value);
+
+          if (input_event_queue_.emplace_back_event(device_id_, time_stamp, usage_page, usage, integer_value)) {
+            // We need to check whether event is emplaced into `input_event_queue_` since
+            // `emplace_back_event` does not add an event in some usage_page and usage.
+
+            auto& element_event = input_event_queue_.get_events().back();
+
+            if (auto key_code = element_event.get_event().get_key_code()) {
+              // Update keyboard_repeat_detector_
+
+              keyboard_repeat_detector_.set(*key_code, element_event.get_event_type());
+
+              // Send `device_keys_are_released` event if needed.
+
+              if (integer_value) {
+                pressed_keys_.insert(elements_key(usage_page, usage));
+              } else {
+                size_t size = pressed_keys_.size();
+                pressed_keys_.erase(elements_key(usage_page, usage));
+                if (size > 0 && pressed_keys_.empty()) {
+                  event_queue::queued_event::event event(event_queue::queued_event::event::type::device_keys_are_released, 1);
+                  input_event_queue_.emplace_back_event(device_id_,
+                                                        time_stamp,
+                                                        event,
+                                                        event_type::key_down,
+                                                        event);
+                }
+              }
+            }
+
+            if (auto pointing_button = element_event.get_event().get_pointing_button()) {
+              // Send `device_pointing_buttons_are_released` event if needed.
+
+              if (integer_value) {
+                pressed_pointing_buttons_.insert(elements_key(usage_page, usage));
+              } else {
+                size_t size = pressed_pointing_buttons_.size();
+                pressed_pointing_buttons_.erase(elements_key(usage_page, usage));
+                if (size > 0 && pressed_pointing_buttons_.empty()) {
+                  event_queue::queued_event::event event(event_queue::queued_event::event::type::device_pointing_buttons_are_released, 1);
+                  input_event_queue_.emplace_back_event(device_id_,
+                                                        time_stamp,
+                                                        event,
+                                                        event_type::key_down,
+                                                        event);
+                }
+              }
+            }
+          }
+        }
+
+        CFRelease(value);
+
+      } else {
         break;
       }
-
-      retained_values.push_back(value);
     }
 
-    // ----------------------------------------
-    // Sort values
-
-    std::sort(retained_values.begin(), retained_values.end(), [](const IOHIDValueRef& v1, const IOHIDValueRef& v2) {
-      auto t1 = IOHIDValueGetTimeStamp(v1);
-      auto t2 = IOHIDValueGetTimeStamp(v2);
-
-      if (t1 == t2) {
-        auto e1 = IOHIDValueGetElement(v1);
-        auto e2 = IOHIDValueGetElement(v2);
-
-        if (e1 && e2) {
-          auto modifier_flag1 = modifier_flag::zero;
-          auto modifier_flag2 = modifier_flag::zero;
-
-          auto usage_page1 = IOHIDElementGetUsagePage(e1);
-          auto usage1 = IOHIDElementGetUsage(e1);
-          auto usage_page2 = IOHIDElementGetUsagePage(e2);
-          auto usage2 = IOHIDElementGetUsage(e2);
-
-          if (auto key_code1 = types::get_key_code(usage_page1, usage1)) {
-            modifier_flag1 = types::get_modifier_flag(*key_code1);
-          }
-          if (auto key_code2 = types::get_key_code(usage_page2, usage2)) {
-            modifier_flag2 = types::get_modifier_flag(*key_code2);
-          }
-
-          // If either modifier_flag1 or modifier_flag2 is modifier, reorder it before.
-
-          if (modifier_flag1 == modifier_flag::zero &&
-              modifier_flag2 != modifier_flag::zero) {
-            // v2 is modifier_flag
-            auto integer_value2 = IOHIDValueGetIntegerValue(v2);
-            if (integer_value2) {
-              // reorder to v2,v1 if v2 is pressed.
-              return false;
-            } else {
-              return true;
-            }
-          }
-
-          if (modifier_flag1 != modifier_flag::zero &&
-              modifier_flag2 == modifier_flag::zero) {
-            // v1 is modifier_flag
-            auto integer_value1 = IOHIDValueGetIntegerValue(v1);
-            if (integer_value1) {
-              return true;
-            } else {
-              // reorder to v2,v1 if v1 is released.
-              return false;
-            }
-          }
-        }
-      }
-
-      // keep order
-      return t1 <= t2;
-    });
-
-    // ----------------------------------------
-    // Then process the callback.
-
-    for (const auto& value : retained_values) {
-      auto element = IOHIDValueGetElement(value);
-      if (element) {
-        auto usage_page = IOHIDElementGetUsagePage(element);
-        auto usage = IOHIDElementGetUsage(element);
-        auto integer_value = IOHIDValueGetIntegerValue(value);
-
-        // Update repeating_key_
-        if (auto key_code = types::get_key_code(usage_page, usage)) {
-          bool pressed = integer_value;
-          if (pressed) {
-            if (types::get_modifier_flag(*key_code) != modifier_flag::zero) {
-              // The pressed key is a modifier key.
-              repeating_key_ = boost::none;
-            } else {
-              repeating_key_ = *key_code;
-            }
-          } else {
-            if (repeating_key_ && *repeating_key_ == *key_code) {
-              repeating_key_ = boost::none;
-            }
-          }
-        }
-
-        // Update pressed_buttons_
-        if (auto pointing_button = types::get_pointing_button(usage_page, usage)) {
-          bool pressed = integer_value;
-          if (pressed) {
-            pressed_buttons_.push_back(*pointing_button);
-          } else {
-            pressed_buttons_.remove(*pointing_button);
-          }
-        }
-
-        // Update pressed_key_usages_.
-        if ((usage_page == kHIDPage_KeyboardOrKeypad) ||
-            (usage_page == kHIDPage_AppleVendorTopCase && usage == kHIDUsage_AV_TopCase_KeyboardFn) ||
-            (usage_page == kHIDPage_Button)) {
-          bool pressed = integer_value;
-          uint64_t u = (static_cast<uint64_t>(usage_page) << 32) | usage;
-          if (pressed) {
-            pressed_key_usages_.push_back(u);
-          } else {
-            pressed_key_usages_.remove(u);
-          }
-        }
-
-        // Call value_callback_.
-        if (value_callback_ && !disabled_) {
-          value_callback_(*this, value, element, usage_page, usage, integer_value);
-        }
-      }
+    // Call value_callback_.
+    if (value_callback_) {
+      value_callback_(*this, input_event_queue_);
     }
 
-    // ----------------------------------------
-    // Release retained values
-
-    for (const auto& value : retained_values) {
-      CFRelease(value);
-    }
+    input_event_queue_.clear_events();
   }
 
   static void static_input_report_callback(void* _Nullable context,
@@ -851,11 +810,11 @@ private:
     }
   }
 
-  uint64_t elements_key(uint32_t usage_page, uint32_t usage) const {
-    return ((static_cast<uint64_t>(usage_page) << 32) | usage);
+  uint64_t elements_key(hid_usage_page usage_page, hid_usage usage) const {
+    return ((static_cast<uint64_t>(usage_page) << 32) | static_cast<uint32_t>(usage));
   }
 
-  IOHIDElementRef _Nullable get_element(uint32_t usage_page, uint32_t usage) const {
+  IOHIDElementRef _Nullable get_element(hid_usage_page usage_page, hid_usage usage) const {
     auto key = elements_key(usage_page, usage);
     auto it = elements_.find(key);
     if (it == elements_.end()) {
@@ -881,30 +840,37 @@ private:
   spdlog::logger& logger_;
 
   IOHIDDeviceRef _Nonnull device_;
-  uint64_t registry_entry_id_;
+  device_id device_id_;
   IOHIDQueueRef _Nullable queue_;
   std::unordered_map<uint64_t, IOHIDElementRef> elements_;
 
-  boost::optional<key_code> repeating_key_;
-  std::list<pointing_button> pressed_buttons_;
-  std::list<uint64_t> pressed_key_usages_;
+  std::string name_for_log_;
+
+  event_queue input_event_queue_;
+
   value_callback value_callback_;
   report_callback report_callback_;
   std::vector<uint8_t> report_buffer_;
 
   is_grabbable_callback is_grabbable_callback_;
+  spdlog_utility::log_reducer is_grabbable_callback_log_reducer_;
+
   grabbed_callback grabbed_callback_;
   ungrabbed_callback ungrabbed_callback_;
   disabled_callback disabled_callback_;
-  spdlog_utility::log_reducer is_grabbable_log_reducer_;
   std::unique_ptr<gcd_utility::main_queue_timer> grab_timer_;
+  bool removed_;
   bool observed_;
   bool grabbed_;
   // `disabled_` is ignoring input events from this device.
   // (== `grabbed_` and does not call `value_callback_`)
   bool disabled_;
 
-  bool is_built_in_keyboard_;
-  bool disable_built_in_keyboard_if_exists_;
+  std::unique_ptr<connected_devices::device> connected_device_;
+
+  keyboard_repeat_detector keyboard_repeat_detector_;
+
+  std::unordered_set<uint64_t> pressed_keys_;
+  std::unordered_set<uint64_t> pressed_pointing_buttons_;
 };
-}
+} // namespace krbn

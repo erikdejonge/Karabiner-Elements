@@ -1,5 +1,6 @@
 #include "boost_defs.hpp"
 
+#include "../include/logger.hpp"
 #include "human_interface_device.hpp"
 #include "iokit_utility.hpp"
 #include <CoreFoundation/CoreFoundation.h>
@@ -16,17 +17,6 @@
 #include <mach/mach_time.h>
 
 namespace {
-class logger final {
-public:
-  static spdlog::logger& get_logger(void) {
-    static std::shared_ptr<spdlog::logger> logger;
-    if (!logger) {
-      logger = spdlog::stdout_logger_mt("control_led", true);
-    }
-    return *logger;
-  }
-};
-
 class control_led final {
 public:
   control_led(const control_led&) = delete;
@@ -38,7 +28,7 @@ public:
     }
 
     auto device_matching_dictionaries = krbn::iokit_utility::create_device_matching_dictionaries({
-        std::make_pair(kHIDPage_GenericDesktop, kHIDUsage_GD_Keyboard),
+        std::make_pair(krbn::hid_usage_page::generic_desktop, krbn::hid_usage::gd_keyboard),
     });
     if (device_matching_dictionaries) {
       IOHIDManagerSetDeviceMatchingMultiple(manager_, device_matching_dictionaries);
@@ -83,12 +73,12 @@ private:
 
     if (auto caps_lock_led_state = dev->get_caps_lock_led_state()) {
       switch (*caps_lock_led_state) {
-      case krbn::led_state::on:
-        logger::get_logger().info("caps_lock_led_state is on.");
-        break;
-      case krbn::led_state::off:
-        logger::get_logger().info("caps_lock_led_state is off.");
-        break;
+        case krbn::led_state::on:
+          logger::get_logger().info("caps_lock_led_state is on.");
+          break;
+        case krbn::led_state::off:
+          logger::get_logger().info("caps_lock_led_state is off.");
+          break;
       }
 
       if (caps_lock_led_state == krbn::led_state::on) {
@@ -136,7 +126,7 @@ private:
   IOHIDManagerRef _Nullable manager_;
   std::unordered_map<IOHIDDeviceRef, std::unique_ptr<krbn::human_interface_device>> hids_;
 };
-}
+} // namespace
 
 int main(int argc, const char* argv[]) {
   krbn::thread_utility::register_main_thread();

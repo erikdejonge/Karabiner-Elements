@@ -5,6 +5,7 @@
 #include "Karabiner-VirtualHIDDevice/dist/include/karabiner_virtual_hid_device_methods.hpp"
 #include "apple_hid_usage_tables.hpp"
 #include "constants.hpp"
+#include "stream_utility.hpp"
 #include "system_preferences.hpp"
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
@@ -15,7 +16,9 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace krbn {
@@ -26,6 +29,41 @@ enum class operation_type : uint8_t {
   system_preferences_values_updated,
 };
 
+enum class device_id : uint32_t {
+  zero = 0,
+};
+
+enum class hid_usage_page : uint32_t {
+  zero = 0,
+  generic_desktop = kHIDPage_GenericDesktop,
+  keyboard_or_keypad = kHIDPage_KeyboardOrKeypad,
+  leds = kHIDPage_LEDs,
+  button = kHIDPage_Button,
+  consumer = kHIDPage_Consumer,
+  apple_vendor_keyboard = kHIDPage_AppleVendorKeyboard,
+  apple_vendor_top_case = kHIDPage_AppleVendorTopCase,
+};
+
+enum class hid_usage : uint32_t {
+  zero = 0,
+
+  gd_pointer = kHIDUsage_GD_Pointer,
+  gd_mouse = kHIDUsage_GD_Mouse,
+  gd_keyboard = kHIDUsage_GD_Keyboard,
+  gd_x = kHIDUsage_GD_X,
+  gd_y = kHIDUsage_GD_Y,
+  gd_z = kHIDUsage_GD_Z,
+  gd_wheel = kHIDUsage_GD_Wheel,
+
+  led_caps_lock = kHIDUsage_LED_CapsLock,
+
+  csmr_consumercontrol = kHIDUsage_Csmr_ConsumerControl,
+  csmr_acpan = kHIDUsage_Csmr_ACPan,
+
+  apple_vendor_keyboard_function = kHIDUsage_AppleVendorKeyboard_Function,
+  av_top_case_keyboard_fn = kHIDUsage_AV_TopCase_KeyboardFn,
+};
+
 enum class event_type : uint32_t {
   key_down,
   key_up,
@@ -33,8 +71,40 @@ enum class event_type : uint32_t {
 
 enum class key_code : uint32_t {
   // 0x00 - 0xff are keys in keyboard_or_keypad usage page.
+
+  a = kHIDUsage_KeyboardA,
+  b = kHIDUsage_KeyboardB,
+  c = kHIDUsage_KeyboardC,
+  d = kHIDUsage_KeyboardD,
+  e = kHIDUsage_KeyboardE,
+  f = kHIDUsage_KeyboardF,
+  g = kHIDUsage_KeyboardG,
+  h = kHIDUsage_KeyboardH,
+  i = kHIDUsage_KeyboardI,
+  j = kHIDUsage_KeyboardJ,
+  k = kHIDUsage_KeyboardK,
+  l = kHIDUsage_KeyboardL,
+  m = kHIDUsage_KeyboardM,
+  n = kHIDUsage_KeyboardN,
+  o = kHIDUsage_KeyboardO,
+  p = kHIDUsage_KeyboardP,
+  q = kHIDUsage_KeyboardQ,
+  r = kHIDUsage_KeyboardR,
+  s = kHIDUsage_KeyboardS,
+  t = kHIDUsage_KeyboardT,
+  u = kHIDUsage_KeyboardU,
+  v = kHIDUsage_KeyboardV,
+  w = kHIDUsage_KeyboardW,
+  x = kHIDUsage_KeyboardX,
+  y = kHIDUsage_KeyboardY,
+  z = kHIDUsage_KeyboardZ,
+
   return_or_enter = kHIDUsage_KeyboardReturnOrEnter,
+  escape = kHIDUsage_KeyboardEscape,
   delete_or_backspace = kHIDUsage_KeyboardDeleteOrBackspace,
+  tab = kHIDUsage_KeyboardTab,
+  spacebar = kHIDUsage_KeyboardSpacebar,
+
   caps_lock = kHIDUsage_KeyboardCapsLock,
 
   f1 = kHIDUsage_KeyboardF1,
@@ -95,6 +165,15 @@ enum class key_code : uint32_t {
   mute = kHIDUsage_KeyboardMute,
   volume_decrement = kHIDUsage_KeyboardVolumeDown,
   volume_increment = kHIDUsage_KeyboardVolumeUp,
+
+  left_control = kHIDUsage_KeyboardLeftControl,
+  left_shift = kHIDUsage_KeyboardLeftShift,
+  left_option = kHIDUsage_KeyboardLeftAlt,
+  left_command = kHIDUsage_KeyboardLeftGUI,
+  right_control = kHIDUsage_KeyboardRightControl,
+  right_shift = kHIDUsage_KeyboardRightShift,
+  right_option = kHIDUsage_KeyboardRightAlt,
+  right_command = kHIDUsage_KeyboardRightGUI,
 
   // 0x1000 - are karabiner own virtual key codes or keys not in keyboard_or_keypad usage page.
   extra_ = 0x1000,
@@ -172,7 +251,6 @@ enum class pointing_event : uint32_t {
 
 enum class modifier_flag : uint32_t {
   zero,
-  none,
   caps_lock,
   left_control,
   left_shift,
@@ -183,7 +261,7 @@ enum class modifier_flag : uint32_t {
   right_option,
   right_command,
   fn,
-  prepared_modifier_flag_end_
+  end_,
 };
 
 enum class led_state : uint32_t {
@@ -192,9 +270,11 @@ enum class led_state : uint32_t {
 };
 
 enum class vendor_id : uint32_t {
+  zero = 0,
 };
 
 enum class product_id : uint32_t {
+  zero = 0,
 };
 
 enum class location_id : uint32_t {
@@ -202,28 +282,80 @@ enum class location_id : uint32_t {
 
 class types final {
 public:
+  static device_id get_new_device_id(void) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> guard(mutex);
+
+    static auto id = device_id::zero;
+
+    id = device_id(static_cast<uint32_t>(id) + 1);
+    return id;
+  }
+
   static modifier_flag get_modifier_flag(key_code key_code) {
-    switch (static_cast<uint32_t>(key_code)) {
-    case kHIDUsage_KeyboardLeftControl:
-      return modifier_flag::left_control;
-    case kHIDUsage_KeyboardLeftShift:
-      return modifier_flag::left_shift;
-    case kHIDUsage_KeyboardLeftAlt:
-      return modifier_flag::left_option;
-    case kHIDUsage_KeyboardLeftGUI:
-      return modifier_flag::left_command;
-    case kHIDUsage_KeyboardRightControl:
-      return modifier_flag::right_control;
-    case kHIDUsage_KeyboardRightShift:
-      return modifier_flag::right_shift;
-    case kHIDUsage_KeyboardRightAlt:
-      return modifier_flag::right_option;
-    case kHIDUsage_KeyboardRightGUI:
-      return modifier_flag::right_command;
-    case static_cast<uint32_t>(key_code::fn):
-      return modifier_flag::fn;
-    default:
-      return modifier_flag::zero;
+    // get_modifier_flag(key_code::caps_lock) == modifier_flag::zero.
+
+    switch (key_code) {
+      case key_code::left_control:
+        return modifier_flag::left_control;
+      case key_code::left_shift:
+        return modifier_flag::left_shift;
+      case key_code::left_option:
+        return modifier_flag::left_option;
+      case key_code::left_command:
+        return modifier_flag::left_command;
+      case key_code::right_control:
+        return modifier_flag::right_control;
+      case key_code::right_shift:
+        return modifier_flag::right_shift;
+      case key_code::right_option:
+        return modifier_flag::right_option;
+      case key_code::right_command:
+        return modifier_flag::right_command;
+      case key_code::fn:
+        return modifier_flag::fn;
+      default:
+        return modifier_flag::zero;
+    }
+  }
+
+  static boost::optional<key_code> get_key_code(modifier_flag modifier_flag) {
+    switch (modifier_flag) {
+      case modifier_flag::zero:
+        return boost::none;
+
+      case modifier_flag::caps_lock:
+        return key_code::caps_lock;
+
+      case modifier_flag::left_control:
+        return key_code::left_control;
+
+      case modifier_flag::left_shift:
+        return key_code::left_shift;
+
+      case modifier_flag::left_option:
+        return key_code::left_option;
+
+      case modifier_flag::left_command:
+        return key_code::left_command;
+
+      case modifier_flag::right_control:
+        return key_code::right_control;
+
+      case modifier_flag::right_shift:
+        return key_code::right_shift;
+
+      case modifier_flag::right_option:
+        return key_code::right_option;
+
+      case modifier_flag::right_command:
+        return key_code::right_command;
+
+      case modifier_flag::fn:
+        return key_code::fn;
+
+      case modifier_flag::end_:
+        return boost::none;
     }
   }
 
@@ -456,127 +588,191 @@ public:
     return it->second;
   }
 
-  static boost::optional<key_code> get_key_code(uint32_t usage_page, uint32_t usage) {
+  static boost::optional<key_code> get_key_code(hid_usage_page usage_page, hid_usage usage) {
+    auto u = static_cast<uint32_t>(usage);
+
     switch (usage_page) {
-    case kHIDPage_KeyboardOrKeypad:
-      if (kHIDUsage_KeyboardErrorUndefined < usage && usage < kHIDUsage_Keyboard_Reserved) {
-        return key_code(usage);
-      }
-      break;
+      case hid_usage_page::keyboard_or_keypad:
+        if (kHIDUsage_KeyboardErrorUndefined < u && u < kHIDUsage_Keyboard_Reserved) {
+          return key_code(u);
+        }
+        break;
 
-    case kHIDPage_AppleVendorTopCase:
-      if (usage == kHIDUsage_AV_TopCase_KeyboardFn) {
-        return key_code::fn;
-      }
-      break;
+      case hid_usage_page::apple_vendor_top_case:
+        if (usage == hid_usage::av_top_case_keyboard_fn) {
+          return key_code::fn;
+        }
+        break;
 
-    case kHIDPage_AppleVendorKeyboard:
-      if (usage == kHIDUsage_AppleVendorKeyboard_Function) {
-        return key_code::fn;
-      }
-      break;
+      case hid_usage_page::apple_vendor_keyboard:
+        if (usage == hid_usage::apple_vendor_keyboard_function) {
+          return key_code::fn;
+        }
+        break;
+
+      default:
+        break;
     }
+
     return boost::none;
   }
 
   static boost::optional<pqrs::karabiner_virtual_hid_device::usage_page> get_usage_page(key_code key_code) {
     switch (key_code) {
-    case key_code::fn:
-    case key_code::illumination_decrement:
-    case key_code::illumination_increment:
-    case key_code::apple_top_case_display_brightness_decrement:
-    case key_code::apple_top_case_display_brightness_increment:
-      return pqrs::karabiner_virtual_hid_device::usage_page::apple_vendor_top_case;
+      case key_code::fn:
+      case key_code::illumination_decrement:
+      case key_code::illumination_increment:
+      case key_code::apple_top_case_display_brightness_decrement:
+      case key_code::apple_top_case_display_brightness_increment:
+        return pqrs::karabiner_virtual_hid_device::usage_page::apple_vendor_top_case;
 
-    case key_code::dashboard:
-    case key_code::launchpad:
-    case key_code::mission_control:
-    case key_code::apple_display_brightness_decrement:
-    case key_code::apple_display_brightness_increment:
-      return pqrs::karabiner_virtual_hid_device::usage_page::apple_vendor_keyboard;
+      case key_code::dashboard:
+      case key_code::launchpad:
+      case key_code::mission_control:
+      case key_code::apple_display_brightness_decrement:
+      case key_code::apple_display_brightness_increment:
+        return pqrs::karabiner_virtual_hid_device::usage_page::apple_vendor_keyboard;
 
-    case key_code::mute:
-    case key_code::volume_decrement:
-    case key_code::volume_increment:
-    case key_code::display_brightness_decrement:
-    case key_code::display_brightness_increment:
-    case key_code::rewind:
-    case key_code::play_or_pause:
-    case key_code::fastforward:
-    case key_code::eject:
-      return pqrs::karabiner_virtual_hid_device::usage_page::consumer;
+      case key_code::mute:
+      case key_code::volume_decrement:
+      case key_code::volume_increment:
+      case key_code::display_brightness_decrement:
+      case key_code::display_brightness_increment:
+      case key_code::rewind:
+      case key_code::play_or_pause:
+      case key_code::fastforward:
+      case key_code::eject:
+        return pqrs::karabiner_virtual_hid_device::usage_page::consumer;
 
-    default:
-      return pqrs::karabiner_virtual_hid_device::usage_page::keyboard_or_keypad;
+      case key_code::vk_none:
+        return boost::none;
+
+      default:
+        return pqrs::karabiner_virtual_hid_device::usage_page::keyboard_or_keypad;
     }
   }
 
   static boost::optional<pqrs::karabiner_virtual_hid_device::usage> get_usage(key_code key_code) {
     switch (key_code) {
-    case key_code::fn:
-      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_keyboard_fn;
+      case key_code::fn:
+        return pqrs::karabiner_virtual_hid_device::usage::av_top_case_keyboard_fn;
 
-    case key_code::illumination_decrement:
-      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_illumination_down;
+      case key_code::illumination_decrement:
+        return pqrs::karabiner_virtual_hid_device::usage::av_top_case_illumination_down;
 
-    case key_code::illumination_increment:
-      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_illumination_up;
+      case key_code::illumination_increment:
+        return pqrs::karabiner_virtual_hid_device::usage::av_top_case_illumination_up;
 
-    case key_code::apple_top_case_display_brightness_decrement:
-      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_brightness_down;
+      case key_code::apple_top_case_display_brightness_decrement:
+        return pqrs::karabiner_virtual_hid_device::usage::av_top_case_brightness_down;
 
-    case key_code::apple_top_case_display_brightness_increment:
-      return pqrs::karabiner_virtual_hid_device::usage::av_top_case_brightness_up;
+      case key_code::apple_top_case_display_brightness_increment:
+        return pqrs::karabiner_virtual_hid_device::usage::av_top_case_brightness_up;
 
-    case key_code::dashboard:
-      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_dashboard;
+      case key_code::dashboard:
+        return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_dashboard;
 
-    case key_code::launchpad:
-      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_launchpad;
+      case key_code::launchpad:
+        return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_launchpad;
 
-    case key_code::mission_control:
-      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_expose_all;
+      case key_code::mission_control:
+        return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_expose_all;
 
-    case key_code::apple_display_brightness_decrement:
-      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_brightness_down;
+      case key_code::apple_display_brightness_decrement:
+        return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_brightness_down;
 
-    case key_code::apple_display_brightness_increment:
-      return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_brightness_up;
+      case key_code::apple_display_brightness_increment:
+        return pqrs::karabiner_virtual_hid_device::usage::apple_vendor_keyboard_brightness_up;
 
-    case key_code::mute:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_mute;
+      case key_code::mute:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_mute;
 
-    case key_code::volume_decrement:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_decrement;
+      case key_code::volume_decrement:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_decrement;
 
-    case key_code::volume_increment:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_increment;
+      case key_code::volume_increment:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_volume_increment;
 
-    case key_code::display_brightness_decrement:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_display_brightness_decrement;
+      case key_code::display_brightness_decrement:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_display_brightness_decrement;
 
-    case key_code::display_brightness_increment:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_display_brightness_increment;
+      case key_code::display_brightness_increment:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_display_brightness_increment;
 
-    case key_code::rewind:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_rewind;
+      case key_code::rewind:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_rewind;
 
-    case key_code::play_or_pause:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_play_or_pause;
+      case key_code::play_or_pause:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_play_or_pause;
 
-    case key_code::fastforward:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_fastforward;
+      case key_code::fastforward:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_fastforward;
 
-    case key_code::eject:
-      return pqrs::karabiner_virtual_hid_device::usage::csmr_eject;
+      case key_code::eject:
+        return pqrs::karabiner_virtual_hid_device::usage::csmr_eject;
 
-    default:
-      return pqrs::karabiner_virtual_hid_device::usage(key_code);
+      case key_code::vk_none:
+        return boost::none;
+
+      default:
+        return pqrs::karabiner_virtual_hid_device::usage(key_code);
     }
   }
 
-  static boost::optional<pointing_button> get_pointing_button(uint32_t usage_page, uint32_t usage) {
-    if (usage_page == kHIDPage_Button) {
+  static const std::unordered_map<std::string, pointing_button>& get_pointing_button_map(void) {
+    static std::unordered_map<std::string, pointing_button> map({
+        // From IOHIDUsageTables.h
+
+        {"button1", pointing_button::button1},
+        {"button2", pointing_button::button2},
+        {"button3", pointing_button::button3},
+        {"button4", pointing_button::button4},
+        {"button5", pointing_button::button5},
+        {"button6", pointing_button::button6},
+        {"button7", pointing_button::button7},
+        {"button8", pointing_button::button8},
+
+        {"button9", pointing_button::button9},
+        {"button10", pointing_button::button10},
+        {"button11", pointing_button::button11},
+        {"button12", pointing_button::button12},
+        {"button13", pointing_button::button13},
+        {"button14", pointing_button::button14},
+        {"button15", pointing_button::button15},
+        {"button16", pointing_button::button16},
+
+        {"button17", pointing_button::button17},
+        {"button18", pointing_button::button18},
+        {"button19", pointing_button::button19},
+        {"button20", pointing_button::button20},
+        {"button21", pointing_button::button21},
+        {"button22", pointing_button::button22},
+        {"button23", pointing_button::button23},
+        {"button24", pointing_button::button24},
+
+        {"button25", pointing_button::button25},
+        {"button26", pointing_button::button26},
+        {"button27", pointing_button::button27},
+        {"button28", pointing_button::button28},
+        {"button29", pointing_button::button29},
+        {"button30", pointing_button::button30},
+        {"button31", pointing_button::button31},
+        {"button32", pointing_button::button32},
+    });
+    return map;
+  }
+
+  static boost::optional<pointing_button> get_pointing_button(const std::string& name) {
+    auto& map = get_pointing_button_map();
+    auto it = map.find(name);
+    if (it == map.end()) {
+      return boost::none;
+    }
+    return it->second;
+  }
+
+  static boost::optional<pointing_button> get_pointing_button(hid_usage_page usage_page, hid_usage usage) {
+    if (usage_page == hid_usage_page::button) {
       return pointing_button(usage);
     }
     return boost::none;
@@ -621,4 +817,30 @@ struct operation_type_system_preferences_values_updated_struct {
   const operation_type operation_type;
   system_preferences::values values;
 };
-}
+
+// stream output
+
+#define KRBN_TYPES_STREAM_OUTPUT(TYPE)                                                                                                               \
+  inline std::ostream& operator<<(std::ostream& stream, const TYPE& value) {                                                                         \
+    return stream_utility::output_enum(stream, value);                                                                                               \
+  }                                                                                                                                                  \
+                                                                                                                                                     \
+  template <template <class T, class A> class container>                                                                                             \
+  inline std::ostream& operator<<(std::ostream& stream, const container<TYPE, std::allocator<TYPE>>& values) {                                       \
+    return stream_utility::output_enums(stream, values);                                                                                             \
+  }                                                                                                                                                  \
+                                                                                                                                                     \
+  template <template <class T, class H, class K, class A> class container>                                                                           \
+  inline std::ostream& operator<<(std::ostream& stream, const container<TYPE, std::hash<TYPE>, std::equal_to<TYPE>, std::allocator<TYPE>>& values) { \
+    return stream_utility::output_enums(stream, values);                                                                                             \
+  }
+
+KRBN_TYPES_STREAM_OUTPUT(device_id);
+KRBN_TYPES_STREAM_OUTPUT(event_type);
+KRBN_TYPES_STREAM_OUTPUT(key_code);
+KRBN_TYPES_STREAM_OUTPUT(modifier_flag);
+KRBN_TYPES_STREAM_OUTPUT(pointing_button);
+
+#undef KRBN_TYPES_STREAM_OUTPUT
+
+} // namespace krbn

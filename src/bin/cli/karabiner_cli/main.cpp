@@ -7,12 +7,16 @@ namespace {
 class logger final {
 public:
   static spdlog::logger& get_logger(void) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> guard(mutex);
+
     static std::shared_ptr<spdlog::logger> logger;
     if (!logger) {
-      logger = spdlog::stdout_logger_mt("karabiner_cli", true);
+      logger = spdlog::stdout_color_mt("karabiner_cli");
       logger->set_pattern("[%l] %v");
       logger->set_level(spdlog::level::err);
     }
+
     return *logger;
   }
 };
@@ -60,7 +64,7 @@ int remove_system_default_profile(void) {
   }
   return 0;
 }
-}
+} // namespace
 
 int main(int argc, char* argv[]) {
   krbn::thread_utility::register_main_thread();

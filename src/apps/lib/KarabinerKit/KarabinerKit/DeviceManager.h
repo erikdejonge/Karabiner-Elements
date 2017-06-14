@@ -1,11 +1,11 @@
 // -*- Mode: objc -*-
 
 @import Foundation;
-#import "DeviceModel.h"
+#import "ConnectedDevices.h"
 
 @interface KarabinerKitDeviceManager : NSObject
 
-@property(copy, readonly) NSArray<KarabinerKitDeviceModel*>* deviceModels;
+@property(readonly) KarabinerKitConnectedDevices* connectedDevices;
 
 + (KarabinerKitDeviceManager*)sharedManager;
 
