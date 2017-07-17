@@ -28,9 +28,9 @@
             "complex_modifications": {
                 "rules": [
                     {
-                        "conditions": [],
                         "manipulators": [
                             {
+                                "description": "Change control+[ to escape.",
                                 "type": "basic",
                                 "from": {
                                     "key_code": "open_bracket",
@@ -90,23 +90,30 @@
                                 ],
                                 "type": "basic",
                                 "parameters": {
-                                    "basic": {
-                                        "to_if_alone_timeout_milliseconds": 400
-                                    }
+                                    "basic.to_if_alone_timeout_milliseconds": 400
                                 }
                             }
                         ]
+                    },
+                    {
+                        "description": "description test",
+                        "manipulators": [
+                            {
+                                "description": "description test 2"
+                            }
+                        ]
+                    },
+                    {
+                        "manipulators": []
                     }
                 ],
                 "dummy": {
                     "keep_me": true
                 },
                 "parameters": {
-                    "basic": {
-                        "to_if_alone_timeout_milliseconds": 800,
-                        "dummy": {
-                            "keep_me": true
-                        }
+                    "basic.to_if_alone_timeout_milliseconds": 800,
+                    "dummy": {
+                        "keep_me": true
                     }
                 }
             },

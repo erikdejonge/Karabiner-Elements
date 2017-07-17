@@ -14,6 +14,7 @@ const char* _Nonnull libkrbn_get_distributed_notification_observed_object(void);
 const char* _Nonnull libkrbn_get_distributed_notification_grabber_is_launched(void);
 const char* _Nonnull libkrbn_get_distributed_notification_console_user_server_is_disabled(void);
 const char* _Nonnull libkrbn_get_devices_json_file_path(void);
+const char* _Nonnull libkrbn_get_user_complex_modifications_assets_directory(void);
 
 bool libkrbn_lock_single_application_with_user_pid_file(const char* _Nonnull pid_file_name);
 void libkrbn_unlock_single_application(void);
@@ -80,6 +81,18 @@ void libkrbn_core_configuration_replace_selected_profile_fn_function_key(libkrbn
                                                                          const char* _Nonnull from,
                                                                          const char* _Nonnull to);
 
+// profile:complex_modifications
+
+size_t libkrbn_core_configuration_get_selected_profile_complex_modifications_rules_size(libkrbn_core_configuration* _Nonnull p);
+const char* _Nullable libkrbn_core_configuration_get_selected_profile_complex_modifications_rule_description(libkrbn_core_configuration* _Nonnull p, size_t index);
+void libkrbn_core_configuration_erase_selected_profile_complex_modifications_rule(libkrbn_core_configuration* _Nonnull p, size_t index);
+void libkrbn_core_configuration_swap_selected_profile_complex_modifications_rules(libkrbn_core_configuration* _Nonnull p, size_t index1, size_t index2);
+int libkrbn_core_configuration_get_selected_profile_complex_modifications_parameter(libkrbn_core_configuration* _Nonnull p,
+                                                                                    const char* _Nonnull name);
+void libkrbn_core_configuration_set_selected_profile_complex_modifications_parameter(libkrbn_core_configuration* _Nonnull p,
+                                                                                     const char* _Nonnull name,
+                                                                                     int value);
+
 // profile::virtual_hid_device
 
 const char* _Nullable libkrbn_core_configuration_get_selected_profile_virtual_hid_keyboard_keyboard_type(libkrbn_core_configuration* _Nonnull p);
@@ -111,6 +124,35 @@ void libkrbn_core_configuration_set_selected_profile_device_disable_built_in_key
                                                                                                 bool is_keyboard,
                                                                                                 bool is_pointing_device,
                                                                                                 bool value);
+
+// ----------------------------------------
+// libkrbn_complex_modifications_assets_manager
+
+typedef void libkrbn_complex_modifications_assets_manager;
+
+bool libkrbn_complex_modifications_assets_manager_initialize(libkrbn_complex_modifications_assets_manager* _Nullable* _Nonnull out);
+void libkrbn_complex_modifications_assets_manager_terminate(libkrbn_complex_modifications_assets_manager* _Nullable* _Nonnull p);
+
+void libkrbn_complex_modifications_assets_manager_reload(libkrbn_complex_modifications_assets_manager* _Nonnull p);
+
+size_t libkrbn_complex_modifications_assets_manager_get_files_size(libkrbn_complex_modifications_assets_manager* _Nonnull p);
+const char* _Nullable libkrbn_complex_modifications_assets_manager_get_file_title(libkrbn_complex_modifications_assets_manager* _Nonnull p,
+                                                                                  size_t index);
+
+size_t libkrbn_complex_modifications_assets_manager_get_file_rules_size(libkrbn_complex_modifications_assets_manager* _Nonnull p,
+                                                                        size_t file_index);
+const char* _Nullable libkrbn_complex_modifications_assets_manager_get_file_rule_description(libkrbn_complex_modifications_assets_manager* _Nonnull p,
+                                                                                             size_t file_index,
+                                                                                             size_t index);
+
+void libkrbn_complex_modifications_assets_manager_add_rule_to_core_configuration_selected_profile(libkrbn_complex_modifications_assets_manager* _Nonnull p,
+                                                                                                  size_t file_index,
+                                                                                                  size_t index,
+                                                                                                  libkrbn_core_configuration* _Nonnull q);
+bool libkrbn_complex_modifications_assets_manager_is_user_file(libkrbn_complex_modifications_assets_manager* _Nonnull p,
+                                                               size_t index);
+void libkrbn_complex_modifications_assets_manager_erase_file(libkrbn_complex_modifications_assets_manager* _Nonnull p,
+                                                             size_t index);
 
 // ----------------------------------------
 // libkrbn_configuration_monitor
@@ -174,6 +216,8 @@ void libkrbn_log_monitor_terminate(libkrbn_log_monitor* _Nullable* _Nonnull p);
 size_t libkrbn_log_monitor_initial_lines_size(libkrbn_log_monitor* _Nonnull p);
 const char* _Nullable libkrbn_log_monitor_initial_line(libkrbn_log_monitor* _Nonnull p, size_t index);
 void libkrbn_log_monitor_start(libkrbn_log_monitor* _Nonnull p);
+bool libkrbn_is_warn_log(const char* _Nonnull line);
+bool libkrbn_is_err_log(const char* _Nonnull line);
 
 // ----------------------------------------
 // libkrbn_version_monitor

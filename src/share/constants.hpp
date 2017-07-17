@@ -24,6 +24,10 @@ public:
     return "/Library/Application Support/org.pqrs/tmp/karabiner_grabber_devices.json";
   }
 
+  static const char* get_console_user_server_socket_directory(void) {
+    return "/Library/Application Support/org.pqrs/tmp/karabiner_console_user_server";
+  }
+
   static const char* get_system_configuration_directory(void) {
     return "/Library/Application Support/org.pqrs/config";
   }
@@ -100,6 +104,24 @@ public:
     }
 
     return file_path;
+  }
+
+  static const std::string& get_user_complex_modifications_assets_directory(void) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> guard(mutex);
+
+    static bool once = false;
+    static std::string directory;
+
+    if (!once) {
+      once = true;
+      auto d = get_user_configuration_directory();
+      if (!d.empty()) {
+        directory = d + "/assets/complex_modifications";
+      }
+    }
+
+    return directory;
   }
 
   static const std::string& get_user_log_directory(void) {

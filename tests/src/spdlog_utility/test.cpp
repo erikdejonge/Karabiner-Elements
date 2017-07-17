@@ -9,26 +9,10 @@
 #include <boost/optional/optional_io.hpp>
 #include <ostream>
 
-class logger final {
-public:
-  static spdlog::logger& get_logger(void) {
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> guard(mutex);
-
-    static std::shared_ptr<spdlog::logger> logger;
-    if (!logger) {
-      logger = spdlog::stdout_color_mt("log_reducer");
-    }
-
-    return *logger;
-  }
-};
-
 TEST_CASE("get_timestamp_number") {
   {
     auto actual = krbn::spdlog_utility::get_sort_key("[2016-10-15 00:09:47.283] [info] [grabber] version 0.90.50");
-    REQUIRE(actual != boost::none);
-    REQUIRE(*actual == 20161015000947283);
+    REQUIRE(actual == 20161015000947283ULL);
   }
   {
     auto actual = krbn::spdlog_utility::get_sort_key("[]");
@@ -40,8 +24,39 @@ TEST_CASE("get_timestamp_number") {
   }
 }
 
+TEST_CASE("get_level") {
+  {
+    auto actual = krbn::spdlog_utility::get_level("[2016-10-15 00:09:47.283] [info] [grabber] version 0.90.50");
+    REQUIRE(actual == spdlog::level::info);
+  }
+  {
+    auto actual = krbn::spdlog_utility::get_level("[2016-10-15 00:09:47.283] [error] [grabber] version 0.90.50");
+    REQUIRE(actual == spdlog::level::err);
+  }
+  {
+    auto actual = krbn::spdlog_utility::get_level("[2016-10-15 00:09:47.283] [unknown] [grabber] version 0.90.50");
+    REQUIRE(actual == boost::none);
+  }
+  {
+    auto actual = krbn::spdlog_utility::get_level("[2016-10-15 00:09:47.283] ");
+    REQUIRE(actual == boost::none);
+  }
+  {
+    auto actual = krbn::spdlog_utility::get_level("[2016-10-15 00:09:47.283] [");
+    REQUIRE(actual == boost::none);
+  }
+  {
+    auto actual = krbn::spdlog_utility::get_level("[2016-10-15 00:09:47.283] [info");
+    REQUIRE(actual == boost::none);
+  }
+  {
+    auto actual = krbn::spdlog_utility::get_level("[2016-10-15 00:09:47.283] [info]");
+    REQUIRE(actual == spdlog::level::info);
+  }
+}
+
 TEST_CASE("log_reducer") {
-  krbn::spdlog_utility::log_reducer log_reducer(logger::get_logger());
+  krbn::spdlog_utility::log_reducer log_reducer;
 
   // reduce
   log_reducer.info("test1");

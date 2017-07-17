@@ -5,6 +5,7 @@
 #include "Karabiner-VirtualHIDDevice/dist/include/karabiner_virtual_hid_device_methods.hpp"
 #include "apple_hid_usage_tables.hpp"
 #include "constants.hpp"
+#include "logger.hpp"
 #include "stream_utility.hpp"
 #include "system_preferences.hpp"
 #include <CoreFoundation/CoreFoundation.h>
@@ -27,6 +28,9 @@ enum class operation_type : uint8_t {
   // console_user_server -> grabber
   connect,
   system_preferences_values_updated,
+  frontmost_application_changed,
+  // grabber -> console_user_server
+  shell_command_execution,
 };
 
 enum class device_id : uint32_t {
@@ -583,6 +587,7 @@ public:
     auto& map = get_key_code_map();
     auto it = map.find(name);
     if (it == map.end()) {
+      logger::get_logger().error("unknown key_code: {0}", name);
       return boost::none;
     }
     return it->second;
@@ -766,6 +771,7 @@ public:
     auto& map = get_pointing_button_map();
     auto it = map.find(name);
     if (it == map.end()) {
+      logger::get_logger().error("unknown pointing_button: {0}", name);
       return boost::none;
     }
     return it->second;
@@ -793,6 +799,7 @@ public:
     auto& map = get_keyboard_type_map();
     auto it = map.find(name);
     if (it == map.end()) {
+      logger::get_logger().error("unknown keyboard_type: {0}", name);
       return boost::none;
     }
     return it->second;
@@ -816,6 +823,21 @@ struct operation_type_system_preferences_values_updated_struct {
 
   const operation_type operation_type;
   system_preferences::values values;
+};
+
+struct operation_type_frontmost_application_changed_struct {
+  operation_type_frontmost_application_changed_struct(void) : operation_type(operation_type::frontmost_application_changed) {}
+
+  const operation_type operation_type;
+  char bundle_identifier[256];
+  char file_path[_POSIX_PATH_MAX];
+};
+
+struct operation_type_shell_command_execution_struct {
+  operation_type_shell_command_execution_struct(void) : operation_type(operation_type::shell_command_execution) {}
+
+  const operation_type operation_type;
+  char shell_command[256];
 };
 
 // stream output

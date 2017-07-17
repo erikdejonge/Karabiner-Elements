@@ -1,7 +1,6 @@
 #include "configuration_monitor.hpp"
 #include "core_configuration.hpp"
 #include "libkrbn.h"
-#include "libkrbn.hpp"
 
 namespace {
 class libkrbn_core_configuration_class final {
@@ -22,14 +21,14 @@ public:
   libkrbn_configuration_monitor_class(const libkrbn_configuration_monitor_class&) = delete;
 
   libkrbn_configuration_monitor_class(libkrbn_configuration_monitor_callback callback, void* refcon) : callback_(callback), refcon_(refcon) {
-    configuration_monitor_ = std::make_unique<krbn::configuration_monitor>(libkrbn::get_logger(),
-                                                                           krbn::constants::get_user_core_configuration_file_path(),
-                                                                           [this](const std::shared_ptr<krbn::core_configuration> core_configuration) {
-                                                                             if (callback_) {
-                                                                               auto* p = new libkrbn_core_configuration_class(core_configuration);
-                                                                               callback_(p, refcon_);
-                                                                             }
-                                                                           });
+    configuration_monitor_ = std::make_unique<krbn::configuration_monitor>(
+        krbn::constants::get_user_core_configuration_file_path(),
+        [this](const std::shared_ptr<krbn::core_configuration> core_configuration) {
+          if (callback_) {
+            auto* p = new libkrbn_core_configuration_class(core_configuration);
+            callback_(p, refcon_);
+          }
+        });
   }
 
 private:
@@ -236,6 +235,62 @@ void libkrbn_core_configuration_replace_selected_profile_fn_function_key(libkrbn
   if (auto c = reinterpret_cast<libkrbn_core_configuration_class*>(p)) {
     if (from && to) {
       c->get_core_configuration().get_selected_profile().replace_fn_function_key(from, to);
+    }
+  }
+}
+
+size_t libkrbn_core_configuration_get_selected_profile_complex_modifications_rules_size(libkrbn_core_configuration* p) {
+  if (auto c = reinterpret_cast<libkrbn_core_configuration_class*>(p)) {
+    return c->get_core_configuration().get_selected_profile().get_complex_modifications().get_rules().size();
+  }
+  return 0;
+}
+
+void libkrbn_core_configuration_push_back_complex_modifications_rule_to_selected_profile(libkrbn_core_configuration* p,
+                                                                                         const krbn::core_configuration::profile::complex_modifications::rule& rule) {
+  if (auto c = reinterpret_cast<libkrbn_core_configuration_class*>(p)) {
+    c->get_core_configuration().get_selected_profile().push_back_complex_modifications_rule(rule);
+  }
+}
+
+void libkrbn_core_configuration_erase_selected_profile_complex_modifications_rule(libkrbn_core_configuration* p, size_t index) {
+  if (auto c = reinterpret_cast<libkrbn_core_configuration_class*>(p)) {
+    c->get_core_configuration().get_selected_profile().erase_complex_modifications_rule(index);
+  }
+}
+
+void libkrbn_core_configuration_swap_selected_profile_complex_modifications_rules(libkrbn_core_configuration* p, size_t index1, size_t index2) {
+  if (auto c = reinterpret_cast<libkrbn_core_configuration_class*>(p)) {
+    c->get_core_configuration().get_selected_profile().swap_complex_modifications_rules(index1, index2);
+  }
+}
+
+const char* _Nullable libkrbn_core_configuration_get_selected_profile_complex_modifications_rule_description(libkrbn_core_configuration* p, size_t index) {
+  if (auto c = reinterpret_cast<libkrbn_core_configuration_class*>(p)) {
+    const auto& rules = c->get_core_configuration().get_selected_profile().get_complex_modifications().get_rules();
+    if (index < rules.size()) {
+      return rules[index].get_description().c_str();
+    }
+  }
+  return 0;
+}
+
+int libkrbn_core_configuration_get_selected_profile_complex_modifications_parameter(libkrbn_core_configuration* p,
+                                                                                    const char* name) {
+  if (auto c = reinterpret_cast<libkrbn_core_configuration_class*>(p)) {
+    if (name) {
+      return c->get_core_configuration().get_selected_profile().get_complex_modifications().get_parameters().get_value(name);
+    }
+  }
+  return 0;
+}
+
+void libkrbn_core_configuration_set_selected_profile_complex_modifications_parameter(libkrbn_core_configuration* p,
+                                                                                     const char* name,
+                                                                                     int value) {
+  if (auto c = reinterpret_cast<libkrbn_core_configuration_class*>(p)) {
+    if (name) {
+      c->get_core_configuration().get_selected_profile().set_complex_modifications_parameter(name, value);
     }
   }
 }

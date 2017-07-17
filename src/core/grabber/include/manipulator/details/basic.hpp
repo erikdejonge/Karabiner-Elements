@@ -2,6 +2,7 @@
 
 #include "manipulator/details/base.hpp"
 #include "manipulator/details/types.hpp"
+#include "time_utility.hpp"
 #include <json/json.hpp>
 #include <unordered_set>
 #include <vector>
@@ -67,17 +68,25 @@ public:
                                                                                             from_(json.find("from") != std::end(json) ? json["from"] : nlohmann::json()) {
     {
       const std::string key = "to";
-      if (json.find(key) != std::end(json) && json[key].is_array()) {
-        for (const auto& j : json[key]) {
-          to_.emplace_back(j);
+      if (json.find(key) != std::end(json)) {
+        if (json[key].is_array()) {
+          for (const auto& j : json[key]) {
+            to_.emplace_back(j);
+          }
+        } else {
+          logger::get_logger().error("`to` should be array: {0}", json.dump());
         }
       }
     }
     {
       const std::string key = "to_if_alone";
-      if (json.find(key) != std::end(json) && json[key].is_array()) {
-        for (const auto& j : json[key]) {
-          to_if_alone_.emplace_back(j);
+      if (json.find(key) != std::end(json)) {
+        if (json[key].is_array()) {
+          for (const auto& j : json[key]) {
+            to_if_alone_.emplace_back(j);
+          }
+        } else {
+          logger::get_logger().error("`to_if_alone` should be array: {0}", json.dump());
         }
       }
     }
@@ -94,27 +103,19 @@ public:
   virtual void manipulate(event_queue::queued_event& front_input_event,
                           const event_queue& input_event_queue,
                           event_queue& output_event_queue) {
-    bool key_or_button = false;
+    unset_alone_if_needed(front_input_event.get_event(),
+                          front_input_event.get_event_type());
+
     bool is_target = false;
 
     if (auto key_code = front_input_event.get_event().get_key_code()) {
-      key_or_button = true;
       if (from_.get_key_code() == key_code) {
         is_target = true;
       }
     }
     if (auto pointing_button = front_input_event.get_event().get_pointing_button()) {
-      key_or_button = true;
       if (from_.get_pointing_button() == pointing_button) {
         is_target = true;
-      }
-    }
-
-    if (key_or_button) {
-      if (front_input_event.get_event_type() == event_type::key_down) {
-        for (auto& e : manipulated_original_events_) {
-          e.unset_alone();
-        }
       }
     }
 
@@ -129,15 +130,28 @@ public:
 
       if (front_input_event.get_event_type() == event_type::key_down) {
 
+        // ----------------------------------------
+        // Check whether event is target.
+
         if (!valid_) {
           is_target = false;
         }
 
-        if (auto modifiers = from_.test_modifiers(output_event_queue.get_modifier_flag_manager())) {
-          from_mandatory_modifiers = *modifiers;
-        } else {
-          is_target = false;
+        if (is_target) {
+          if (auto modifiers = from_.test_modifiers(output_event_queue.get_modifier_flag_manager())) {
+            from_mandatory_modifiers = *modifiers;
+          } else {
+            is_target = false;
+          }
         }
+
+        if (is_target) {
+          if (!condition_manager_.is_fulfilled(output_event_queue.get_manipulator_environment())) {
+            is_target = false;
+          }
+        }
+
+        // ----------------------------------------
 
         if (is_target) {
           manipulated_original_events_.emplace_back(front_input_event.get_device_id(),
@@ -244,7 +258,7 @@ public:
 
                 uint64_t nanoseconds = time_utility::absolute_to_nano(front_input_event.get_time_stamp() - key_down_time_stamp);
                 if (alone &&
-                    nanoseconds < parameters_.get_basic().get_to_if_alone_timeout_milliseconds() * NSEC_PER_MSEC) {
+                    nanoseconds < parameters_.get_basic_to_if_alone_timeout_milliseconds() * NSEC_PER_MSEC) {
                   send_to_if_alone(front_input_event,
                                    time_stamp_delay,
                                    output_event_queue);
@@ -293,20 +307,10 @@ public:
                                        std::end(manipulated_original_events_));
   }
 
-  virtual void handle_event_from_ignored_device(event_queue::queued_event::event::type original_type,
-                                                event_type event_type,
-                                                event_queue& output_event_queue,
-                                                uint64_t time_stamp) {
-    if (original_type == event_queue::queued_event::event::type::key_code ||
-        original_type == event_queue::queued_event::event::type::pointing_button ||
-        original_type == event_queue::queued_event::event::type::pointing_vertical_wheel ||
-        original_type == event_queue::queued_event::event::type::pointing_horizontal_wheel) {
-      if (event_type == event_type::key_down) {
-        for (auto& e : manipulated_original_events_) {
-          e.unset_alone();
-        }
-      }
-    }
+  virtual void handle_event_from_ignored_device(const event_queue::queued_event& front_input_event,
+                                                event_queue& output_event_queue) {
+    unset_alone_if_needed(front_input_event.get_original_event(),
+                          front_input_event.get_event_type());
   }
 
   const from_event_definition& get_from(void) const {
@@ -395,6 +399,31 @@ private:
                              time_stamp_delay,
                              output_event_queue);
       }
+    }
+  }
+
+  void unset_alone_if_needed(const event_queue::queued_event::event& event,
+                             event_type event_type) {
+    if (event.get_type() == event_queue::queued_event::event::type::key_code ||
+        event.get_type() == event_queue::queued_event::event::type::pointing_button) {
+      if (event_type == event_type::key_down) {
+        goto run;
+      }
+    }
+    if (event.get_type() == event_queue::queued_event::event::type::pointing_vertical_wheel ||
+        event.get_type() == event_queue::queued_event::event::type::pointing_horizontal_wheel) {
+      if (auto integer_value = event.get_integer_value()) {
+        if (*integer_value != 0) {
+          goto run;
+        }
+      }
+    }
+
+    return;
+
+  run:
+    for (auto& e : manipulated_original_events_) {
+      e.unset_alone();
     }
   }
 

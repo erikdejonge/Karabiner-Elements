@@ -1,4 +1,6 @@
 #import "PreferencesWindowController.h"
+#import "ComplexModificationsParametersTabController.h"
+#import "ComplexModificationsRulesTableViewController.h"
 #import "DevicesTableViewController.h"
 #import "FnFunctionKeysTableViewController.h"
 #import "KarabinerKit/KarabinerKit.h"
@@ -13,6 +15,8 @@
 
 @interface PreferencesWindowController ()
 
+@property(weak) IBOutlet ComplexModificationsParametersTabController* complexModificationsParametersTabController;
+@property(weak) IBOutlet ComplexModificationsRulesTableViewController* complexModificationsRulesTableViewController;
 @property(weak) IBOutlet DevicesTableViewController* devicesTableViewController;
 @property(weak) IBOutlet FnFunctionKeysTableViewController* fnFunctionKeysTableViewController;
 @property(weak) IBOutlet LogFileTextViewController* logFileTextViewController;
@@ -47,6 +51,8 @@
   [self.simpleModificationsMenuManager setup];
   [self.simpleModificationsTableViewController setup];
   [self.fnFunctionKeysTableViewController setup];
+  [self.complexModificationsRulesTableViewController setup];
+  [self.complexModificationsParametersTabController setup];
   [self.devicesTableViewController setup];
   [self setupVirtualHIDKeyboardTypePopUpButton];
   [self setupVirtualHIDKeyboardCapsLockDelayMilliseconds:nil];
@@ -75,16 +81,6 @@
 
                                                   [self updateSystemPreferencesUIValues];
                                                 }];
-  [[NSNotificationCenter defaultCenter] addObserverForName:kSelectedProfileChanged
-                                                    object:nil
-                                                     queue:[NSOperationQueue mainQueue]
-                                                usingBlock:^(NSNotification* note) {
-                                                  @strongify(self);
-                                                  if (!self) return;
-
-                                                  [self setupVirtualHIDKeyboardTypePopUpButton];
-                                                  [self setupVirtualHIDKeyboardCapsLockDelayMilliseconds:nil];
-                                                }];
 
   // ----------------------------------------
   // Update UI values
@@ -109,6 +105,10 @@
 - (void)show {
   [self.window makeKeyAndOrderFront:self];
   [NSApp activateIgnoringOtherApps:YES];
+}
+
+- (void)tabView:(NSTabView*)tabView didSelectTabViewItem:(NSTabViewItem*)tabViewItem {
+  [self.logFileTextViewController updateTabLabel];
 }
 
 - (void)setupVirtualHIDKeyboardTypePopUpButton {

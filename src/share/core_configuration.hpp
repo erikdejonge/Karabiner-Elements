@@ -2,12 +2,12 @@
 
 #include "constants.hpp"
 #include "filesystem.hpp"
+#include "logger.hpp"
 #include "session.hpp"
 #include "types.hpp"
 #include <fstream>
 #include <json/json.hpp>
 #include <natural_sort/natural_sort.hpp>
-#include <spdlog/spdlog.h>
 #include <string>
 #include <unordered_map>
 
@@ -83,6 +83,7 @@ public:
       j["selected"] = selected_;
       j["simple_modifications"] = simple_modifications_;
       j["fn_function_keys"] = fn_function_keys_;
+      j["complex_modifications"] = complex_modifications_;
       j["virtual_hid_keyboard"] = virtual_hid_keyboard_;
       j["devices"] = devices_;
       return j;
@@ -114,8 +115,8 @@ public:
     void replace_simple_modification(size_t index, const std::string& from, const std::string& to) {
       simple_modifications_.replace_pair(index, from, to);
     }
-    const std::unordered_map<key_code, key_code> get_simple_modifications_key_code_map(spdlog::logger& logger) const {
-      return simple_modifications_.to_key_code_map(logger);
+    const std::unordered_map<key_code, key_code> get_simple_modifications_key_code_map(void) const {
+      return simple_modifications_.to_key_code_map();
     }
 
     const std::vector<std::pair<std::string, std::string>>& get_fn_function_keys(void) const {
@@ -124,12 +125,24 @@ public:
     void replace_fn_function_key(const std::string& from, const std::string& to) {
       fn_function_keys_.replace_second(from, to);
     }
-    const std::unordered_map<key_code, key_code> get_fn_function_keys_key_code_map(spdlog::logger& logger) const {
-      return fn_function_keys_.to_key_code_map(logger);
+    const std::unordered_map<key_code, key_code> get_fn_function_keys_key_code_map(void) const {
+      return fn_function_keys_.to_key_code_map();
     }
 
     const complex_modifications& get_complex_modifications(void) const {
       return complex_modifications_;
+    }
+    void push_back_complex_modifications_rule(const profile::complex_modifications::rule& rule) {
+      complex_modifications_.push_back_rule(rule);
+    }
+    void erase_complex_modifications_rule(size_t index) {
+      complex_modifications_.erase_rule(index);
+    }
+    void swap_complex_modifications_rules(size_t index1, size_t index2) {
+      complex_modifications_.swap_rules(index1, index2);
+    }
+    void set_complex_modifications_parameter(const std::string& name, int value) {
+      complex_modifications_.set_parameter_value(name, value);
     }
 
     const virtual_hid_keyboard& get_virtual_hid_keyboard(void) const {
@@ -202,8 +215,8 @@ public:
 
   core_configuration(const core_configuration&) = delete;
 
-  core_configuration(spdlog::logger& logger, const std::string& file_path) : loaded_(true),
-                                                                             global_configuration_(nlohmann::json()) {
+  core_configuration(const std::string& file_path) : loaded_(true),
+                                                     global_configuration_(nlohmann::json()) {
     bool valid_file_owner = false;
 
     // Load karabiner.json only when the owner is root or current session user.
@@ -219,7 +232,7 @@ public:
       }
 
       if (!valid_file_owner) {
-        logger.warn("{0} is not owned by a valid user.", file_path);
+        logger::get_logger().warn("{0} is not owned by a valid user.", file_path);
         loaded_ = false;
 
       } else {
@@ -244,7 +257,7 @@ public:
             }
 
           } catch (std::exception& e) {
-            logger.warn("parse error in {0}: {1}", file_path, e.what());
+            logger::get_logger().error("parse error in {0}: {1}", file_path, e.what());
             json_ = nlohmann::json();
             loaded_ = false;
           }
@@ -358,6 +371,14 @@ inline void to_json(nlohmann::json& json, const core_configuration::profile::sim
 
 inline void to_json(nlohmann::json& json, const core_configuration::profile::complex_modifications& complex_modifications) {
   json = complex_modifications.to_json();
+}
+
+inline void to_json(nlohmann::json& json, const core_configuration::profile::complex_modifications::rule& rule) {
+  json = rule.get_json();
+}
+
+inline void to_json(nlohmann::json& json, const core_configuration::profile::complex_modifications::parameters& parameters) {
+  json = parameters.to_json();
 }
 
 inline void to_json(nlohmann::json& json, const core_configuration::profile::virtual_hid_keyboard& virtual_hid_keyboard) {

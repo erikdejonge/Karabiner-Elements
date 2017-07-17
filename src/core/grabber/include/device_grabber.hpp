@@ -30,7 +30,6 @@ public:
   device_grabber(virtual_hid_device_client& virtual_hid_device_client) : virtual_hid_device_client_(virtual_hid_device_client),
                                                                          profile_(nlohmann::json()),
                                                                          mode_(mode::observing),
-                                                                         is_grabbable_callback_log_reducer_(logger::get_logger()),
                                                                          suspended_(false) {
     virtual_hid_device_client_disconnected_connection = virtual_hid_device_client_.client_disconnected.connect(
         boost::bind(&device_grabber::virtual_hid_device_client_disconnected_callback, this));
@@ -113,8 +112,7 @@ public:
       // So, we create event_tap_manager here.
       event_tap_manager_ = std::make_unique<event_tap_manager>(std::bind(&device_grabber::caps_lock_state_changed_callback, this, std::placeholders::_1));
 
-      configuration_monitor_ = std::make_unique<configuration_monitor>(logger::get_logger(),
-                                                                       user_core_configuration_file_path,
+      configuration_monitor_ = std::make_unique<configuration_monitor>(user_core_configuration_file_path,
                                                                        [this](std::shared_ptr<core_configuration> core_configuration) {
                                                                          core_configuration_ = core_configuration;
 
@@ -191,34 +189,34 @@ public:
     });
   }
 
-  void set_profile(const core_configuration::profile& profile) {
-    profile_ = profile;
-
-    update_simple_modifications_manipulators();
-    update_complex_modifications_manipulators();
-    update_fn_function_keys_manipulators();
-
-    // Update virtual_hid_keyboard
-    {
-      pqrs::karabiner_virtual_hid_device::properties::keyboard_initialization properties;
-      if (auto k = types::get_keyboard_type(profile.get_virtual_hid_keyboard().get_keyboard_type())) {
-        properties.keyboard_type = *k;
-      }
-      properties.caps_lock_delay_milliseconds = pqrs::karabiner_virtual_hid_device::milliseconds(profile.get_virtual_hid_keyboard().get_caps_lock_delay_milliseconds());
-      virtual_hid_device_client_.initialize_virtual_hid_keyboard(properties);
-    }
-  }
-
   void unset_profile(void) {
-    profile_ = core_configuration::profile(nlohmann::json());
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      profile_ = core_configuration::profile(nlohmann::json());
 
-    manipulator_managers_connector_.invalidate_manipulators();
+      manipulator_managers_connector_.invalidate_manipulators();
+    });
   }
 
   void set_system_preferences_values(const system_preferences::values& values) {
-    system_preferences_values_ = values;
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      system_preferences_values_ = values;
 
-    update_fn_function_keys_manipulators();
+      update_fn_function_keys_manipulators();
+    });
+  }
+
+  void post_frontmost_application_changed_event(const std::string& bundle_identifier,
+                                                const std::string& file_path) {
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      auto event = event_queue::queued_event::event::make_frontmost_application_changed_event(bundle_identifier,
+                                                                                              file_path);
+      merged_input_event_queue_.emplace_back_event(device_id(0),
+                                                   mach_absolute_time(),
+                                                   event,
+                                                   event_type::key_down,
+                                                   event);
+      manipulate();
+    });
   }
 
 private:
@@ -249,9 +247,9 @@ private:
       return;
     }
 
-    iokit_utility::log_matching_device(logger::get_logger(), device);
+    iokit_utility::log_matching_device(device);
 
-    auto dev = std::make_unique<human_interface_device>(logger::get_logger(), device);
+    auto dev = std::make_unique<human_interface_device>(device);
     dev->set_is_grabbable_callback(std::bind(&device_grabber::is_grabbable_callback, this, std::placeholders::_1));
     dev->set_grabbed_callback(std::bind(&device_grabber::grabbed_callback, this, std::placeholders::_1));
     dev->set_ungrabbed_callback(std::bind(&device_grabber::ungrabbed_callback, this, std::placeholders::_1));
@@ -298,7 +296,7 @@ private:
       return;
     }
 
-    iokit_utility::log_removal_device(logger::get_logger(), device);
+    iokit_utility::log_removal_device(device);
 
     auto it = hids_.find(device);
     if (it != hids_.end()) {
@@ -345,12 +343,12 @@ private:
           merged_input_event_queue_.push_back_event(queued_event);
         } else {
           // device is ignored
-          auto event = event_queue::queued_event::event::make_event_from_ignored_device(queued_event.get_event().get_type());
+          auto event = event_queue::queued_event::event::make_event_from_ignored_device_event();
           merged_input_event_queue_.emplace_back_event(queued_event.get_device_id(),
                                                        queued_event.get_time_stamp(),
                                                        event,
                                                        queued_event.get_event_type(),
-                                                       event);
+                                                       queued_event.get_event());
         }
       }
     }
@@ -360,7 +358,7 @@ private:
   }
 
   void post_device_ungrabbed_event(device_id device_id) {
-    event_queue::queued_event::event event(event_queue::queued_event::event::type::device_ungrabbed, 1);
+    auto event = event_queue::queued_event::event::make_device_ungrabbed_event();
     merged_input_event_queue_.emplace_back_event(device_id,
                                                  mach_absolute_time(),
                                                  event,
@@ -554,10 +552,28 @@ private:
     }
   }
 
+  void set_profile(const core_configuration::profile& profile) {
+    profile_ = profile;
+
+    update_simple_modifications_manipulators();
+    update_complex_modifications_manipulators();
+    update_fn_function_keys_manipulators();
+
+    // Update virtual_hid_keyboard
+    {
+      pqrs::karabiner_virtual_hid_device::properties::keyboard_initialization properties;
+      if (auto k = types::get_keyboard_type(profile.get_virtual_hid_keyboard().get_keyboard_type())) {
+        properties.keyboard_type = *k;
+      }
+      properties.caps_lock_delay_milliseconds = pqrs::karabiner_virtual_hid_device::milliseconds(profile.get_virtual_hid_keyboard().get_caps_lock_delay_milliseconds());
+      virtual_hid_device_client_.initialize_virtual_hid_keyboard(properties);
+    }
+  }
+
   void update_simple_modifications_manipulators(void) {
     simple_modifications_manipulator_manager_.invalidate_manipulators();
 
-    for (const auto& pair : profile_.get_simple_modifications_key_code_map(logger::get_logger())) {
+    for (const auto& pair : profile_.get_simple_modifications_key_code_map()) {
       auto manipulator = std::make_shared<manipulator::details::basic>(manipulator::details::from_event_definition(
                                                                            pair.first,
                                                                            {},
@@ -577,6 +593,9 @@ private:
     for (const auto& rule : profile_.get_complex_modifications().get_rules()) {
       for (const auto& manipulator : rule.get_manipulators()) {
         auto m = krbn::manipulator::manipulator_factory::make_manipulator(manipulator.get_json(), manipulator.get_parameters());
+        for (const auto& c : manipulator.get_conditions()) {
+          m->push_back_condition(krbn::manipulator::manipulator_factory::make_condition(c.get_json()));
+        }
         complex_modifications_manipulator_manager_.push_back_manipulator(m);
       }
     }
@@ -637,7 +656,7 @@ private:
 
     // from_modifiers+f1 -> display_brightness_decrement ...
 
-    for (const auto& pair : profile_.get_fn_function_keys_key_code_map(logger::get_logger())) {
+    for (const auto& pair : profile_.get_fn_function_keys_key_code_map()) {
       auto manipulator = std::make_shared<manipulator::details::basic>(manipulator::details::from_event_definition(
                                                                            pair.first,
                                                                            from_mandatory_modifiers,
