@@ -181,7 +181,7 @@ public:
         if (auto shell_command = e.get_shell_command()) {
           try {
             if (auto current_console_user_id = session::get_current_console_user_id()) {
-              console_user_server_client client(*current_console_user_id);;
+              console_user_server_client client(*current_console_user_id);
               client.shell_command_execution(*shell_command);
             }
           } catch (std::exception& e) {
@@ -500,6 +500,10 @@ public:
 
   virtual bool active(void) const {
     return !queue_.empty();
+  }
+
+  virtual bool needs_virtual_hid_pointing(void) const {
+    return false;
   }
 
   virtual void handle_device_ungrabbed_event(device_id device_id,

@@ -11,5 +11,6 @@ a.out: $(SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $(SOURCES) $(LDFLAGS)
 
 run:
+	rm -f tmp/*
 	@./a.out
-	diff tmp/manipulator_environment.json expected/manipulator_environment.json
+	for f in expected/*.json; do diff -u "tmp/`basename $$f`" "$$f" || exit 1; done

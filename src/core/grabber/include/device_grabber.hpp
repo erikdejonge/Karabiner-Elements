@@ -37,6 +37,8 @@ public:
     post_event_to_virtual_devices_manipulator_ = std::make_shared<manipulator::details::post_event_to_virtual_devices>();
     post_event_to_virtual_devices_manipulator_manager_.push_back_manipulator(std::shared_ptr<manipulator::details::base>(post_event_to_virtual_devices_manipulator_));
 
+    complex_modifications_applied_event_queue_.enable_manipulator_environment_json_output(constants::get_manipulator_environment_json_file_path());
+
     // Connect manipulator_managers
 
     manipulator_managers_connector_.emplace_back_connection(simple_modifications_manipulator_manager_,
@@ -266,11 +268,7 @@ private:
 
     output_devices_json();
 
-    if (is_pointing_device_grabbed()) {
-      virtual_hid_device_client_.initialize_virtual_hid_pointing();
-    } else {
-      virtual_hid_device_client_.terminate_virtual_hid_pointing();
-    }
+    update_virtual_hid_pointing();
 
     // ----------------------------------------
     if (mode_ == mode::grabbing) {
@@ -314,11 +312,7 @@ private:
 
     output_devices_json();
 
-    if (is_pointing_device_grabbed()) {
-      virtual_hid_device_client_.initialize_virtual_hid_pointing();
-    } else {
-      virtual_hid_device_client_.terminate_virtual_hid_pointing();
-    }
+    update_virtual_hid_pointing();
 
     // ----------------------------------------
     if (mode_ == mode::grabbing) {
@@ -475,6 +469,15 @@ private:
     return false;
   }
 
+  void update_virtual_hid_pointing(void) {
+    if (is_pointing_device_grabbed() ||
+        manipulator_managers_connector_.needs_virtual_hid_pointing()) {
+      virtual_hid_device_client_.initialize_virtual_hid_pointing();
+    } else {
+      virtual_hid_device_client_.terminate_virtual_hid_pointing();
+    }
+  }
+
   boost::optional<const core_configuration::profile::device&> find_device_configuration(const human_interface_device& device) {
     if (core_configuration_) {
       for (const auto& d : core_configuration_->get_selected_profile().get_devices()) {
@@ -568,6 +571,8 @@ private:
       properties.caps_lock_delay_milliseconds = pqrs::karabiner_virtual_hid_device::milliseconds(profile.get_virtual_hid_keyboard().get_caps_lock_delay_milliseconds());
       virtual_hid_device_client_.initialize_virtual_hid_keyboard(properties);
     }
+
+    update_virtual_hid_pointing();
   }
 
   void update_simple_modifications_manipulators(void) {
