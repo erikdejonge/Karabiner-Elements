@@ -11,15 +11,16 @@ public:
   class connection final {
   public:
     connection(manipulator_manager& manipulator_manager,
-               event_queue& input_event_queue,
-               event_queue& output_event_queue) : manipulator_manager_(manipulator_manager),
-                                                  input_event_queue_(input_event_queue),
-                                                  output_event_queue_(output_event_queue) {
+               const std::shared_ptr<event_queue>& input_event_queue,
+               const std::shared_ptr<event_queue>& output_event_queue) : manipulator_manager_(manipulator_manager),
+                                                                         input_event_queue_(input_event_queue),
+                                                                         output_event_queue_(output_event_queue) {
     }
 
-    void manipulate(void) {
-      manipulator_manager_.manipulate(input_event_queue_,
-                                      output_event_queue_);
+    void manipulate(uint64_t now) {
+      manipulator_manager_.manipulate(input_event_queue_.lock(),
+                                      output_event_queue_.lock(),
+                                      now);
     }
 
     void invalidate_manipulators(void) {
@@ -30,45 +31,58 @@ public:
       return manipulator_manager_.needs_virtual_hid_pointing();
     }
 
+    boost::optional<uint64_t> make_input_event_time_stamp_with_input_delay(void) const {
+      if (auto ieq = input_event_queue_.lock()) {
+        if (!ieq->get_events().empty()) {
+          return ieq->get_events().front().get_event_time_stamp().make_time_stamp_with_input_delay();
+        }
+      }
+      return boost::none;
+    }
+
     void log_events_sizes(void) const {
-      logger::get_logger().info("connection events sizes: {0} -> {1}",
-                                input_event_queue_.get_events().size(),
-                                output_event_queue_.get_events().size());
+      if (auto ieq = input_event_queue_.lock()) {
+        if (auto oeq = output_event_queue_.lock()) {
+          logger::get_logger().info("connection events sizes: {0} -> {1}",
+                                    ieq->get_events().size(),
+                                    oeq->get_events().size());
+        }
+      }
     }
 
   private:
     manipulator_manager& manipulator_manager_;
-    event_queue& input_event_queue_;
-    event_queue& output_event_queue_;
+    std::weak_ptr<event_queue> input_event_queue_;
+    std::weak_ptr<event_queue> output_event_queue_;
   };
 
-  manipulator_managers_connector(void) : last_output_event_queue_(nullptr) {
+  manipulator_managers_connector(void) {
   }
 
   void emplace_back_connection(manipulator_manager& manipulator_manager,
-                               event_queue& input_event_queue,
-                               event_queue& output_event_queue) {
+                               const std::shared_ptr<event_queue>& input_event_queue,
+                               const std::shared_ptr<event_queue>& output_event_queue) {
     connections_.emplace_back(manipulator_manager,
                               input_event_queue,
                               output_event_queue);
-    last_output_event_queue_ = &output_event_queue;
+    last_output_event_queue_ = output_event_queue;
   }
 
   void emplace_back_connection(manipulator_manager& manipulator_manager,
-                               event_queue& output_event_queue) {
-    if (!last_output_event_queue_) {
-      throw std::runtime_error("last_output_event_queue_ is nullptr");
+                               const std::shared_ptr<event_queue>& output_event_queue) {
+    if (auto ieq = last_output_event_queue_.lock()) {
+      connections_.emplace_back(manipulator_manager,
+                                ieq,
+                                output_event_queue);
+      last_output_event_queue_ = output_event_queue;
+    } else {
+      throw std::runtime_error("last_output_event_queue_ is invalid");
     }
-
-    connections_.emplace_back(manipulator_manager,
-                              *last_output_event_queue_,
-                              output_event_queue);
-    last_output_event_queue_ = &output_event_queue;
   }
 
-  void manipulate(void) {
+  void manipulate(uint64_t now) {
     for (auto&& c : connections_) {
-      c.manipulate();
+      c.manipulate(now);
     }
   }
 
@@ -79,12 +93,25 @@ public:
   }
 
   bool needs_virtual_hid_pointing(void) const {
-    for (auto&& c : connections_) {
-      if (c.needs_virtual_hid_pointing()) {
-        return true;
+    return std::any_of(std::begin(connections_),
+                       std::end(connections_),
+                       [](auto& c) {
+                         return c.needs_virtual_hid_pointing();
+                       });
+  }
+
+  boost::optional<uint64_t> min_input_event_time_stamp(void) const {
+    boost::optional<uint64_t> result;
+
+    for (const auto& c : connections_) {
+      if (auto t = c.make_input_event_time_stamp_with_input_delay()) {
+        if (!result || *t < *result) {
+          result = t;
+        }
       }
     }
-    return false;
+
+    return result;
   }
 
   void log_events_sizes(void) const {
@@ -95,7 +122,7 @@ public:
 
 private:
   std::vector<connection> connections_;
-  event_queue* last_output_event_queue_;
+  std::weak_ptr<event_queue> last_output_event_queue_;
 };
 } // namespace manipulator
 } // namespace krbn

@@ -1,0 +1,54 @@
+[
+    {
+        "apple_vendor_top_case_input": {
+            "keys": [
+                "fn"
+            ]
+        },
+        "time_stamp": 5000000,
+        "type": "apple_vendor_top_case_input"
+    },
+    {
+        "keyboard_input": {
+            "keys": [
+                "page_up"
+            ],
+            "modifiers": []
+        },
+        "time_stamp": 10000000,
+        "type": "keyboard_input"
+    },
+    {
+        "keyboard_input": {
+            "keys": [],
+            "modifiers": []
+        },
+        "time_stamp": 15000000,
+        "type": "keyboard_input"
+    },
+    {
+        "keyboard_input": {
+            "keys": [
+                "page_up"
+            ],
+            "modifiers": []
+        },
+        "time_stamp": 20000000,
+        "type": "keyboard_input"
+    },
+    {
+        "keyboard_input": {
+            "keys": [],
+            "modifiers": []
+        },
+        "time_stamp": 25000000,
+        "type": "keyboard_input"
+    },
+    {
+        "apple_vendor_top_case_input": {
+            "keys": []
+        },
+        "time_stamp": 30000000,
+        "type": "apple_vendor_top_case_input"
+    }
+]

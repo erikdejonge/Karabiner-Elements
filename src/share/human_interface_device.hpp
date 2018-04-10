@@ -6,9 +6,11 @@
 #include "cf_utility.hpp"
 #include "connected_devices.hpp"
 #include "core_configuration.hpp"
+#include "device_detail.hpp"
 #include "event_queue.hpp"
 #include "gcd_utility.hpp"
 #include "iokit_utility.hpp"
+#include "keyboard_repeat_detector.hpp"
 #include "logger.hpp"
 #include "spdlog_utility.hpp"
 #include "types.hpp"
@@ -52,35 +54,10 @@ public:
   typedef std::function<void(human_interface_device& device)> ungrabbed_callback;
   typedef std::function<void(human_interface_device& device)> disabled_callback;
 
-  class keyboard_repeat_detector final {
-  public:
-    void set(key_code key_code, event_type event_type) {
-      if (event_type == event_type::key_down) {
-        if (types::get_modifier_flag(key_code) != modifier_flag::zero) {
-          repeating_key_ = boost::none;
-        } else {
-          repeating_key_ = key_code;
-        }
-
-      } else if (event_type == event_type::key_up) {
-        if (repeating_key_ == key_code) {
-          repeating_key_ = boost::none;
-        }
-      }
-    }
-
-    bool is_repeating(void) const {
-      return repeating_key_ != boost::none;
-    }
-
-  private:
-    boost::optional<key_code> repeating_key_;
-  };
-
   human_interface_device(const human_interface_device&) = delete;
 
   human_interface_device(IOHIDDeviceRef _Nonnull device) : device_(device),
-                                                           device_id_(types::get_new_device_id()),
+                                                           device_id_(types::make_new_device_id(std::make_shared<device_detail>(device))),
                                                            queue_(nullptr),
                                                            removed_(false),
                                                            observed_(false),
@@ -95,11 +72,11 @@ public:
     {
       std::stringstream stream;
 
-      if (auto product_name = get_product()) {
+      if (auto product_name = find_product()) {
         stream << boost::trim_copy(*product_name);
       } else {
-        if (auto vendor_id = get_vendor_id()) {
-          if (auto product_id = get_product_id()) {
+        if (auto vendor_id = find_vendor_id()) {
+          if (auto product_id = find_product_id()) {
             stream << std::hex
                    << "(vendor_id:0x" << static_cast<uint32_t>(*vendor_id)
                    << ", product_id:0x" << static_cast<uint32_t>(*product_id)
@@ -117,29 +94,23 @@ public:
     {
       std::string manufacturer;
       std::string product;
-      if (auto m = iokit_utility::get_manufacturer(device_)) {
+      if (auto m = iokit_utility::find_manufacturer(device_)) {
         manufacturer = *m;
       }
-      if (auto p = iokit_utility::get_product(device_)) {
+      if (auto p = iokit_utility::find_product(device_)) {
         product = *p;
       }
       connected_devices::device::descriptions descriptions(manufacturer, product);
 
-      auto vendor_id = vendor_id::zero;
-      auto product_id = product_id::zero;
+      auto vendor_id = iokit_utility::find_vendor_id(device_);
+      auto product_id = iokit_utility::find_product_id(device_);
       bool is_keyboard = IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Keyboard);
       bool is_pointing_device = IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Pointer) ||
                                 IOHIDDeviceConformsTo(device_, kHIDPage_GenericDesktop, kHIDUsage_GD_Mouse);
-      if (auto v = iokit_utility::get_vendor_id(device_)) {
-        vendor_id = *v;
-      }
-      if (auto p = iokit_utility::get_product_id(device_)) {
-        product_id = *p;
-      }
-      core_configuration::profile::device::identifiers identifiers(vendor_id,
-                                                                   product_id,
-                                                                   is_keyboard,
-                                                                   is_pointing_device);
+      device_identifiers identifiers(vendor_id,
+                                     product_id,
+                                     is_keyboard,
+                                     is_pointing_device);
 
       bool is_built_in_keyboard = false;
       if (is_keyboard &&
@@ -148,25 +119,58 @@ public:
         is_built_in_keyboard = true;
       }
 
+      bool is_built_in_trackpad = false;
+      if (!is_keyboard &&
+          is_pointing_device &&
+          descriptions.get_product().find("Apple Internal ") != std::string::npos) {
+        is_built_in_trackpad = true;
+      }
+
       connected_device_ = std::make_unique<connected_devices::device>(descriptions,
                                                                       identifiers,
-                                                                      is_built_in_keyboard);
+                                                                      is_built_in_keyboard,
+                                                                      is_built_in_trackpad);
     }
 
     // ----------------------------------------
     // Setup elements_
 
+    // Note:
+    // Some devices has duplicated entries for same usage_page and usage.
+    //
+    // For example, there are entries of Microsoft Designer Mouse:
+    //
+    //   * Microsoft Designer Mouse usage_page 1 usage 2
+    //   * Microsoft Designer Mouse usage_page 1 usage 2
+    //   * Microsoft Designer Mouse usage_page 1 usage 1
+    //   * Microsoft Designer Mouse usage_page 1 usage 56
+    //   * Microsoft Designer Mouse usage_page 1 usage 56
+    //   * Microsoft Designer Mouse usage_page 1 usage 568
+    //   * Microsoft Designer Mouse usage_page 12 usage 568
+    //   * Microsoft Designer Mouse usage_page 9 usage 1
+    //   * Microsoft Designer Mouse usage_page 9 usage 2
+    //   * Microsoft Designer Mouse usage_page 9 usage 3
+    //   * Microsoft Designer Mouse usage_page 9 usage 4
+    //   * Microsoft Designer Mouse usage_page 9 usage 5
+    //   * Microsoft Designer Mouse usage_page 1 usage 48
+    //   * Microsoft Designer Mouse usage_page 1 usage 49
+
     if (auto elements = IOHIDDeviceCopyMatchingElements(device_, nullptr, kIOHIDOptionsTypeNone)) {
       for (CFIndex i = 0; i < CFArrayGetCount(elements); ++i) {
         // Add to elements_.
-        auto element = cf_utility::get_value<IOHIDElementRef>(elements, i);
-        auto usage_page = hid_usage_page(IOHIDElementGetUsagePage(element));
-        auto usage = hid_usage(IOHIDElementGetUsage(element));
+        if (auto e = cf_utility::get_value<IOHIDElementRef>(elements, i)) {
+          CFRetain(e);
 
-        auto key = elements_key(usage_page, usage);
-        if (elements_.find(key) == elements_.end()) {
-          CFRetain(element);
-          elements_[key] = element;
+#if 0
+          logger::get_logger().info("{0} usage_page:{1} usage:{2} min:{3} max:{4}",
+                                    name_for_log_,
+                                    IOHIDElementGetUsagePage(e),
+                                    IOHIDElementGetUsage(e),
+                                    IOHIDElementGetLogicalMin(e),
+                                    IOHIDElementGetLogicalMax(e));
+#endif
+
+          elements_.push_back(e);
         }
       }
       CFRelease(elements);
@@ -181,8 +185,8 @@ public:
       logger::get_logger().error("IOHIDQueueCreate error @ {0}", __PRETTY_FUNCTION__);
     } else {
       // Add elements into queue_.
-      for (const auto& it : elements_) {
-        IOHIDQueueAddElement(queue_, it.second);
+      for (const auto& e : elements_) {
+        IOHIDQueueAddElement(queue_, e);
       }
       IOHIDQueueRegisterValueAvailableCallback(queue_, static_queue_value_available_callback, this);
     }
@@ -197,6 +201,8 @@ public:
       queue_stop();
       close();
 
+      types::detach_device_id(device_id_);
+
       // ----------------------------------------
       // Release queue_
 
@@ -208,8 +214,8 @@ public:
       // ----------------------------------------
       // Release elements_
 
-      for (const auto& it : elements_) {
-        CFRelease(it.second);
+      for (const auto& e : elements_) {
+        CFRelease(e);
       }
       elements_.clear();
 
@@ -222,6 +228,10 @@ public:
 
   device_id get_device_id(void) const {
     return device_id_;
+  }
+
+  bool get_observed(void) const {
+    return observed_;
   }
 
   IOReturn open(IOOptionBits options = kIOHIDOptionsTypeNone) {
@@ -303,10 +313,6 @@ public:
         return;
       }
 
-      if (is_pqrs_device()) {
-        return;
-      }
-
       if (observed_) {
         return;
       }
@@ -327,10 +333,6 @@ public:
   // High-level utility method.
   void unobserve(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
-      if (is_pqrs_device()) {
-        return;
-      }
-
       if (!observed_) {
         return;
       }
@@ -347,10 +349,6 @@ public:
   void grab(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
       if (removed_) {
-        return;
-      }
-
-      if (is_pqrs_device()) {
         return;
       }
 
@@ -390,6 +388,7 @@ public:
             auto r = open(kIOHIDOptionsTypeSeizeDevice);
             if (r != kIOReturnSuccess) {
               logger::get_logger().error("IOHIDDeviceOpen error: {0} ({1}) {2}", iokit_utility::get_error_name(r), r, name_for_log_);
+              cancel_grab_timer();
               return;
             }
 
@@ -411,10 +410,6 @@ public:
   // High-level utility method.
   void ungrab(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
-      if (is_pqrs_device()) {
-        return;
-      }
-
       if (!grabbed_) {
         return;
       }
@@ -441,10 +436,6 @@ public:
 
   void disable(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
-      if (is_pqrs_device()) {
-        return;
-      }
-
       if (disabled_) {
         return;
       }
@@ -461,10 +452,6 @@ public:
 
   void enable(void) {
     gcd_utility::dispatch_sync_in_main_queue(^{
-      if (is_pqrs_device()) {
-        return;
-      }
-
       if (!disabled_) {
         return;
       }
@@ -475,36 +462,40 @@ public:
     });
   }
 
-  boost::optional<long> get_max_input_report_size(void) const {
-    return iokit_utility::get_max_input_report_size(device_);
+  boost::optional<uint64_t> find_registry_entry_id(void) const {
+    return iokit_utility::find_registry_entry_id(device_);
   }
 
-  boost::optional<vendor_id> get_vendor_id(void) const {
-    return iokit_utility::get_vendor_id(device_);
+  boost::optional<long> find_max_input_report_size(void) const {
+    return iokit_utility::find_max_input_report_size(device_);
   }
 
-  boost::optional<product_id> get_product_id(void) const {
-    return iokit_utility::get_product_id(device_);
+  boost::optional<vendor_id> find_vendor_id(void) const {
+    return iokit_utility::find_vendor_id(device_);
   }
 
-  boost::optional<location_id> get_location_id(void) const {
-    return iokit_utility::get_location_id(device_);
+  boost::optional<product_id> find_product_id(void) const {
+    return iokit_utility::find_product_id(device_);
   }
 
-  boost::optional<std::string> get_manufacturer(void) const {
-    return iokit_utility::get_manufacturer(device_);
+  boost::optional<location_id> find_location_id(void) const {
+    return iokit_utility::find_location_id(device_);
   }
 
-  boost::optional<std::string> get_product(void) const {
-    return iokit_utility::get_product(device_);
+  boost::optional<std::string> find_manufacturer(void) const {
+    return iokit_utility::find_manufacturer(device_);
   }
 
-  boost::optional<std::string> get_serial_number(void) const {
-    return iokit_utility::get_serial_number(device_);
+  boost::optional<std::string> find_product(void) const {
+    return iokit_utility::find_product(device_);
   }
 
-  boost::optional<std::string> get_transport(void) const {
-    return iokit_utility::get_transport(device_);
+  boost::optional<std::string> find_serial_number(void) const {
+    return iokit_utility::find_serial_number(device_);
+  }
+
+  boost::optional<std::string> find_transport(void) const {
+    return iokit_utility::find_transport(device_);
   }
 
   std::string get_name_for_log(void) const {
@@ -557,6 +548,22 @@ public:
       return human_interface_device::grabbable_state::ungrabbable_temporarily;
     }
 
+    // Ungrabbable while modifier keys are pressed
+    //
+    // We have to check the modifier keys state to avoid pressed physical modifiers affects in mouse events.
+    // (See DEVELOPMENT.md > Modifier flags handling in kernel)
+
+    if (!pressed_modifier_flags_.empty()) {
+      std::stringstream ss;
+      ss << "We cannot grab " << get_name_for_log() << " while any modifier flags are pressed. (";
+      for (const auto& m : pressed_modifier_flags_) {
+        ss << m << " ";
+      }
+      ss << ")";
+      is_grabbable_callback_log_reducer_.warn(ss.str());
+      return human_interface_device::grabbable_state::ungrabbable_temporarily;
+    }
+
     // ----------------------------------------
     // Ungrabbable while pointing button is pressed.
 
@@ -588,19 +595,24 @@ public:
     boost::optional<led_state> __block state = boost::none;
 
     gcd_utility::dispatch_sync_in_main_queue(^{
-      if (auto element = get_element(hid_usage_page::leds, hid_usage::led_caps_lock)) {
-        auto max = IOHIDElementGetLogicalMax(element);
+      for (const auto& e : elements_) {
+        auto usage_page = hid_usage_page(IOHIDElementGetUsagePage(e));
+        auto usage = hid_usage(IOHIDElementGetUsage(e));
 
-        IOHIDValueRef value;
-        auto r = IOHIDDeviceGetValue(device_, element, &value);
-        if (r != kIOReturnSuccess) {
-          logger::get_logger().error("IOHIDDeviceGetValue error: {1} @ {0}", __PRETTY_FUNCTION__, r);
-        } else {
-          auto integer_value = IOHIDValueGetIntegerValue(value);
-          if (integer_value == max) {
-            state = led_state::on;
-          } else {
-            state = led_state::off;
+        if (usage_page == hid_usage_page::leds &&
+            usage == hid_usage::led_caps_lock) {
+          auto max = IOHIDElementGetLogicalMax(e);
+
+          IOHIDValueRef value;
+          auto r = IOHIDDeviceGetValue(device_, e, &value);
+          if (r == kIOReturnSuccess) {
+            auto integer_value = IOHIDValueGetIntegerValue(value);
+            if (integer_value == max) {
+              state = led_state::on;
+            } else {
+              state = led_state::off;
+            }
+            break;
           }
         }
       }
@@ -611,39 +623,27 @@ public:
 
   // This method requires root privilege to use IOHIDDeviceSetValue for kHIDPage_LEDs usage.
   IOReturn set_caps_lock_led_state(led_state state) {
-    // `IOHIDDeviceSetValue` will block forever with some buggy devices. (eg. Bit Touch)
-    // This, we use a blacklist.
-    if (auto v = get_vendor_id()) {
-      if (auto p = get_product_id()) {
-        if ((*v == vendor_id(0x22ea) && *p == product_id(0xf)) /* Bit Touch (Bit Trade One LTD.) */ ||
-            false) {
-          return kIOReturnSuccess;
-        }
-      }
-    }
-
     IOReturn __block r = kIOReturnError;
 
     gcd_utility::dispatch_sync_in_main_queue(^{
-      if (auto element = get_element(hid_usage_page::leds, hid_usage::led_caps_lock)) {
-        CFIndex integer_value = 0;
-        if (state == led_state::on) {
-          integer_value = IOHIDElementGetLogicalMax(element);
-        } else {
-          integer_value = IOHIDElementGetLogicalMin(element);
-        }
+      for (const auto& e : elements_) {
+        auto usage_page = hid_usage_page(IOHIDElementGetUsagePage(e));
+        auto usage = hid_usage(IOHIDElementGetUsage(e));
 
-        if (auto value = IOHIDValueCreateWithIntegerValue(kCFAllocatorDefault, element, mach_absolute_time(), integer_value)) {
-          r = IOHIDDeviceSetValue(device_, element, value);
-
-          if (r != kIOReturnSuccess) {
-            logger::get_logger().error("IOHIDDeviceSetValue error {1} for {2} @ {0}", __PRETTY_FUNCTION__, r, get_name_for_log());
+        if (usage_page == hid_usage_page::leds &&
+            usage == hid_usage::led_caps_lock) {
+          CFIndex integer_value = 0;
+          if (state == led_state::on) {
+            integer_value = IOHIDElementGetLogicalMax(e);
+          } else {
+            integer_value = IOHIDElementGetLogicalMin(e);
           }
 
-          CFRelease(value);
+          if (auto value = IOHIDValueCreateWithIntegerValue(kCFAllocatorDefault, e, mach_absolute_time(), integer_value)) {
+            IOHIDDeviceSetValue(device_, e, value);
 
-        } else {
-          logger::get_logger().error("IOHIDValueCreateWithIntegerValue error @ {0}", __PRETTY_FUNCTION__);
+            CFRelease(value);
+          }
         }
       }
     });
@@ -667,27 +667,12 @@ public:
     return connected_device_->get_is_built_in_keyboard();
   }
 
-  bool is_pqrs_device(void) const {
-    if (auto manufacturer = get_manufacturer()) {
-      if (*manufacturer == "pqrs.org") {
-        return true;
-      }
-    }
-
-    return false;
+  bool is_built_in_trackpad(void) const {
+    return connected_device_->get_is_built_in_trackpad();
   }
 
-  bool is_pqrs_virtual_hid_keyboard(void) const {
-    if (auto manufacturer = get_manufacturer()) {
-      if (auto product = get_product()) {
-        if (*manufacturer == "pqrs.org" &&
-            *product == "Karabiner VirtualHIDKeyboard") {
-          return true;
-        }
-      }
-    }
-
-    return false;
+  device_detail make_device_detail(void) const {
+    return device_detail(device_);
   }
 
 private:
@@ -705,69 +690,73 @@ private:
   }
 
   void queue_value_available_callback(void) {
-    while (true) {
-      if (auto value = IOHIDQueueCopyNextValueWithTimeout(queue_, 0.)) {
-        auto element = IOHIDValueGetElement(value);
-        if (element) {
-          auto time_stamp = IOHIDValueGetTimeStamp(value);
-          auto usage_page = hid_usage_page(IOHIDElementGetUsagePage(element));
-          auto usage = hid_usage(IOHIDElementGetUsage(element));
-          auto integer_value = IOHIDValueGetIntegerValue(value);
+    std::vector<hid_value> hid_values;
 
-          if (input_event_queue_.emplace_back_event(device_id_, time_stamp, usage_page, usage, integer_value)) {
-            // We need to check whether event is emplaced into `input_event_queue_` since
-            // `emplace_back_event` does not add an event in some usage_page and usage.
+    while (auto value = IOHIDQueueCopyNextValueWithTimeout(queue_, 0.)) {
+      hid_values.emplace_back(value);
 
-            auto& element_event = input_event_queue_.get_events().back();
+      CFRelease(value);
+    }
 
-            if (auto key_code = element_event.get_event().get_key_code()) {
+    for (const auto& pair : event_queue::make_queued_events(hid_values, device_id_)) {
+      auto& hid_value = pair.first;
+      auto& queued_event = pair.second;
+
+      input_event_queue_.push_back_event(queued_event);
+
+      if (hid_value) {
+        if (auto hid_usage_page = hid_value->get_hid_usage_page()) {
+          if (auto hid_usage = hid_value->get_hid_usage()) {
+            if (queued_event.get_event().get_type() == event_queue::queued_event::event::type::key_code ||
+                queued_event.get_event().get_type() == event_queue::queued_event::event::type::consumer_key_code ||
+                queued_event.get_event().get_type() == event_queue::queued_event::event::type::pointing_button) {
+
               // Update keyboard_repeat_detector_
 
-              keyboard_repeat_detector_.set(*key_code, element_event.get_event_type());
+              if (queued_event.get_event().get_type() == event_queue::queued_event::event::type::key_code ||
+                  queued_event.get_event().get_type() == event_queue::queued_event::event::type::consumer_key_code) {
+                keyboard_repeat_detector_.set(*hid_usage_page,
+                                              *hid_usage,
+                                              queued_event.get_event_type());
+              }
 
-              // Send `device_keys_are_released` event if needed.
+              // Update pressed_modifier_flags_
 
-              if (integer_value) {
-                pressed_keys_.insert(elements_key(usage_page, usage));
-              } else {
-                size_t size = pressed_keys_.size();
-                pressed_keys_.erase(elements_key(usage_page, usage));
-                if (size > 0 && pressed_keys_.empty()) {
-                  auto event = event_queue::queued_event::event::make_device_keys_are_released_event();
-                  input_event_queue_.emplace_back_event(device_id_,
-                                                        time_stamp,
-                                                        event,
-                                                        event_type::key_down,
-                                                        event);
+              if (queued_event.get_event().get_type() == event_queue::queued_event::event::type::key_code) {
+                if (auto m = types::make_modifier_flag(*hid_usage_page,
+                                                       *hid_usage)) {
+                  if (queued_event.get_event_type() == event_type::key_down) {
+                    pressed_modifier_flags_.insert(*m);
+                  } else if (queued_event.get_event_type() == event_type::key_up) {
+                    pressed_modifier_flags_.erase(*m);
+                  }
                 }
               }
-            }
 
-            if (auto pointing_button = element_event.get_event().get_pointing_button()) {
-              // Send `device_pointing_buttons_are_released` event if needed.
+              // Update pressed_pointing_buttons_
 
-              if (integer_value) {
-                pressed_pointing_buttons_.insert(elements_key(usage_page, usage));
+              if (queued_event.get_event().get_type() == event_queue::queued_event::event::type::pointing_button) {
+                if (queued_event.get_event_type() == event_type::key_down) {
+                  pressed_pointing_buttons_.insert(elements_key(*hid_usage_page, *hid_usage));
+                } else if (queued_event.get_event_type() == event_type::key_up) {
+                  pressed_pointing_buttons_.erase(elements_key(*hid_usage_page, *hid_usage));
+                }
+              }
+
+              // Send `device_keys_and_pointing_buttons_are_released` event if needed.
+
+              if (queued_event.get_event_type() == event_type::key_down) {
+                pressed_keys_.insert(elements_key(*hid_usage_page, *hid_usage));
               } else {
-                size_t size = pressed_pointing_buttons_.size();
-                pressed_pointing_buttons_.erase(elements_key(usage_page, usage));
-                if (size > 0 && pressed_pointing_buttons_.empty()) {
-                  auto event = event_queue::queued_event::event::make_device_pointing_buttons_are_released_event();
-                  input_event_queue_.emplace_back_event(device_id_,
-                                                        time_stamp,
-                                                        event,
-                                                        event_type::key_down,
-                                                        event);
+                size_t size = pressed_keys_.size();
+                pressed_keys_.erase(elements_key(*hid_usage_page, *hid_usage));
+                if (size > 0) {
+                  post_device_keys_and_pointing_buttons_are_released_event_if_needed(hid_value->get_time_stamp());
                 }
               }
             }
           }
         }
-
-        CFRelease(value);
-
-      } else {
-        break;
       }
     }
 
@@ -777,6 +766,17 @@ private:
     }
 
     input_event_queue_.clear_events();
+  }
+
+  void post_device_keys_and_pointing_buttons_are_released_event_if_needed(uint64_t time_stamp) {
+    if (pressed_keys_.empty()) {
+      auto event = event_queue::queued_event::event::make_device_keys_and_pointing_buttons_are_released_event();
+      input_event_queue_.emplace_back_event(device_id_,
+                                            event_queue::queued_event::event_time_stamp(time_stamp),
+                                            event,
+                                            event_type::single,
+                                            event);
+    }
   }
 
   static void static_input_report_callback(void* _Nullable context,
@@ -811,19 +811,9 @@ private:
     return ((static_cast<uint64_t>(usage_page) << 32) | static_cast<uint32_t>(usage));
   }
 
-  IOHIDElementRef _Nullable get_element(hid_usage_page usage_page, hid_usage usage) const {
-    auto key = elements_key(usage_page, usage);
-    auto it = elements_.find(key);
-    if (it == elements_.end()) {
-      return nullptr;
-    } else {
-      return it->second;
-    }
-  }
-
   void resize_report_buffer(void) {
     size_t buffer_size = 32; // use this provisional value if we cannot get max input report size from device.
-    if (auto size = get_max_input_report_size()) {
+    if (auto size = find_max_input_report_size()) {
       buffer_size = *size;
     }
 
@@ -837,7 +827,7 @@ private:
   IOHIDDeviceRef _Nonnull device_;
   device_id device_id_;
   IOHIDQueueRef _Nullable queue_;
-  std::unordered_map<uint64_t, IOHIDElementRef> elements_;
+  std::vector<IOHIDElementRef> elements_;
 
   std::string name_for_log_;
 
@@ -864,8 +854,24 @@ private:
   std::unique_ptr<connected_devices::device> connected_device_;
 
   keyboard_repeat_detector keyboard_repeat_detector_;
+  std::unordered_set<modifier_flag> pressed_modifier_flags_;
 
   std::unordered_set<uint64_t> pressed_keys_;
   std::unordered_set<uint64_t> pressed_pointing_buttons_;
 };
+
+inline std::ostream& operator<<(std::ostream& stream, const human_interface_device::grabbable_state& value) {
+  switch (value) {
+    case human_interface_device::grabbable_state::grabbable:
+      stream << "grabbable";
+      break;
+    case human_interface_device::grabbable_state::ungrabbable_temporarily:
+      stream << "ungrabbable_temporarily";
+      break;
+    case human_interface_device::grabbable_state::ungrabbable_permanently:
+      stream << "ungrabbable_permanently";
+      break;
+  }
+  return stream;
+}
 } // namespace krbn

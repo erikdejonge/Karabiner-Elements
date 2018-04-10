@@ -1,7 +1,9 @@
 #pragma once
 
+#include "connected_devices.hpp"
 #include "constants.hpp"
 #include "filesystem.hpp"
+#include "json_utility.hpp"
 #include "logger.hpp"
 #include "session.hpp"
 #include "types.hpp"
@@ -14,6 +16,8 @@
 // Example: tests/src/core_configuration/json/example.json
 
 namespace krbn {
+using namespace std::string_literals;
+
 class core_configuration final {
 public:
 #include "core_configuration/global_configuration.hpp"
@@ -21,60 +25,88 @@ public:
   class profile final {
   public:
 #include "core_configuration/profile/complex_modifications.hpp"
-#include "core_configuration/profile/device.hpp"
 #include "core_configuration/profile/simple_modifications.hpp"
 #include "core_configuration/profile/virtual_hid_keyboard.hpp"
 
+#include "core_configuration/profile/device.hpp"
+
     profile(const nlohmann::json& json) : json_(json),
                                           selected_(false),
-                                          simple_modifications_(json.find("simple_modifications") != json.end() ? json["simple_modifications"] : nlohmann::json()),
-                                          fn_function_keys_(nlohmann::json({
-                                              {"f1", "display_brightness_decrement"},
-                                              {"f2", "display_brightness_increment"},
-                                              {"f3", "mission_control"},
-                                              {"f4", "launchpad"},
-                                              {"f5", "illumination_decrement"},
-                                              {"f6", "illumination_increment"},
-                                              {"f7", "rewind"},
-                                              {"f8", "play_or_pause"},
-                                              {"f9", "fastforward"},
-                                              {"f10", "mute"},
-                                              {"f11", "volume_decrement"},
-                                              {"f12", "volume_increment"},
-                                          })),
-                                          complex_modifications_(json.find("complex_modifications") != json.end() ? json["complex_modifications"] : nlohmann::json()),
-                                          virtual_hid_keyboard_(json.find("virtual_hid_keyboard") != json.end() ? json["virtual_hid_keyboard"] : nlohmann::json()) {
-      {
-        const std::string key = "name";
-        if (json.find(key) != json.end() && json[key].is_string()) {
-          name_ = json[key];
+                                          simple_modifications_(json_utility::find_copy(json, "simple_modifications", nlohmann::json::array())),
+                                          fn_function_keys_(make_default_fn_function_keys_json()),
+                                          complex_modifications_(json_utility::find_copy(json, "complex_modifications", nlohmann::json::object())),
+                                          virtual_hid_keyboard_(json_utility::find_copy(json, "virtual_hid_keyboard", nlohmann::json::object())) {
+      if (auto v = json_utility::find_optional<std::string>(json, "name")) {
+        name_ = *v;
+      }
+
+      if (auto v = json_utility::find_optional<bool>(json, "selected")) {
+        selected_ = *v;
+      }
+
+      if (auto v = json_utility::find_json(json, "fn_function_keys")) {
+        fn_function_keys_.update(*v);
+      }
+
+      if (auto v = json_utility::find_array(json, "devices")) {
+        for (const auto& device_json : *v) {
+          devices_.emplace_back(device_json);
         }
       }
-      {
-        const std::string key = "selected";
-        if (json.find(key) != json.end() && json[key].is_boolean()) {
-          selected_ = json[key];
-        }
-      }
-      {
-        const std::string key = "fn_function_keys";
-        if (json.find(key) != json.end() && json[key].is_object()) {
-          for (auto it = json[key].begin(); it != json[key].end(); ++it) {
-            // it.key() is always std::string.
-            if (it.value().is_string()) {
-              fn_function_keys_.replace_second(it.key(), it.value());
-            }
-          }
-        }
-      }
-      {
-        const std::string key = "devices";
-        if (json.find(key) != json.end() && json[key].is_array()) {
-          for (const auto& device_json : json[key]) {
-            devices_.emplace_back(device_json);
-          }
-        }
-      }
+    }
+
+    static nlohmann::json make_default_fn_function_keys_json(void) {
+      auto json = nlohmann::json::array();
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f1";
+      json.back()["to"]["consumer_key_code"] = "display_brightness_decrement";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f2";
+      json.back()["to"]["consumer_key_code"] = "display_brightness_increment";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f3";
+      json.back()["to"]["key_code"] = "mission_control";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f4";
+      json.back()["to"]["key_code"] = "launchpad";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f5";
+      json.back()["to"]["key_code"] = "illumination_decrement";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f6";
+      json.back()["to"]["key_code"] = "illumination_increment";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f7";
+      json.back()["to"]["consumer_key_code"] = "rewind";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f8";
+      json.back()["to"]["consumer_key_code"] = "play_or_pause";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f9";
+      json.back()["to"]["consumer_key_code"] = "fastforward";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f10";
+      json.back()["to"]["consumer_key_code"] = "mute";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f11";
+      json.back()["to"]["consumer_key_code"] = "volume_decrement";
+
+      json.push_back(nlohmann::json::object());
+      json.back()["from"]["key_code"] = "f12";
+      json.back()["to"]["consumer_key_code"] = "volume_increment";
+
+      return json;
     }
 
     nlohmann::json to_json(void) const {
@@ -103,30 +135,46 @@ public:
       selected_ = value;
     }
 
-    const std::vector<std::pair<std::string, std::string>>& get_simple_modifications(void) const {
-      return simple_modifications_.get_pairs();
+    const simple_modifications& get_simple_modifications(void) const {
+      return simple_modifications_;
     }
-    void push_back_simple_modification(void) {
-      simple_modifications_.push_back_pair();
-    }
-    void erase_simple_modification(size_t index) {
-      simple_modifications_.erase_pair(index);
-    }
-    void replace_simple_modification(size_t index, const std::string& from, const std::string& to) {
-      simple_modifications_.replace_pair(index, from, to);
-    }
-    const std::unordered_map<key_code, key_code> get_simple_modifications_key_code_map(void) const {
-      return simple_modifications_.to_key_code_map();
+    simple_modifications& get_simple_modifications(void) {
+      return const_cast<simple_modifications&>(static_cast<const profile&>(*this).get_simple_modifications());
     }
 
-    const std::vector<std::pair<std::string, std::string>>& get_fn_function_keys(void) const {
-      return fn_function_keys_.get_pairs();
+    const simple_modifications* find_simple_modifications(const device_identifiers& identifiers) const {
+      for (const auto& d : devices_) {
+        if (d.get_identifiers() == identifiers) {
+          return &(d.get_simple_modifications());
+        }
+      }
+      return nullptr;
     }
-    void replace_fn_function_key(const std::string& from, const std::string& to) {
-      fn_function_keys_.replace_second(from, to);
+    simple_modifications* find_simple_modifications(const device_identifiers& identifiers) {
+      add_device(identifiers);
+
+      return const_cast<simple_modifications*>(static_cast<const profile&>(*this).find_simple_modifications(identifiers));
     }
-    const std::unordered_map<key_code, key_code> get_fn_function_keys_key_code_map(void) const {
-      return fn_function_keys_.to_key_code_map();
+
+    const simple_modifications& get_fn_function_keys(void) const {
+      return fn_function_keys_;
+    }
+    simple_modifications& get_fn_function_keys(void) {
+      return const_cast<simple_modifications&>(static_cast<const profile&>(*this).get_fn_function_keys());
+    }
+
+    const simple_modifications* find_fn_function_keys(const device_identifiers& identifiers) const {
+      for (const auto& d : devices_) {
+        if (d.get_identifiers() == identifiers) {
+          return &(d.get_fn_function_keys());
+        }
+      }
+      return nullptr;
+    }
+    simple_modifications* find_fn_function_keys(const device_identifiers& identifiers) {
+      add_device(identifiers);
+
+      return const_cast<simple_modifications*>(static_cast<const profile&>(*this).find_fn_function_keys(identifiers));
     }
 
     const complex_modifications& get_complex_modifications(void) const {
@@ -155,30 +203,56 @@ public:
     const std::vector<device>& get_devices(void) const {
       return devices_;
     }
-    bool get_device_ignore(const device::identifiers& identifiers) {
+
+    bool get_device_ignore(const device_identifiers& identifiers) const {
       for (const auto& d : devices_) {
         if (d.get_identifiers() == identifiers) {
           return d.get_ignore();
         }
       }
-      return false;
+
+      device d(nlohmann::json({
+          {"identifiers", identifiers.to_json()},
+      }));
+      return d.get_ignore();
     }
-    void set_device_ignore(const device::identifiers& identifiers,
+    void set_device_ignore(const device_identifiers& identifiers,
                            bool ignore) {
+      add_device(identifiers);
+
       for (auto&& device : devices_) {
         if (device.get_identifiers() == identifiers) {
           device.set_ignore(ignore);
           return;
         }
       }
-
-      auto json = nlohmann::json({
-          {"identifiers", identifiers.to_json()},
-          {"ignore", ignore},
-      });
-      devices_.emplace_back(json);
     }
-    bool get_device_disable_built_in_keyboard_if_exists(const device::identifiers& identifiers) {
+
+    bool get_device_manipulate_caps_lock_led(const device_identifiers& identifiers) const {
+      for (const auto& d : devices_) {
+        if (d.get_identifiers() == identifiers) {
+          return d.get_manipulate_caps_lock_led();
+        }
+      }
+
+      device d(nlohmann::json({
+          {"identifiers", identifiers.to_json()},
+      }));
+      return d.get_manipulate_caps_lock_led();
+    }
+    void set_device_manipulate_caps_lock_led(const device_identifiers& identifiers,
+                                             bool manipulate_caps_lock_led) {
+      add_device(identifiers);
+
+      for (auto&& device : devices_) {
+        if (device.get_identifiers() == identifiers) {
+          device.set_manipulate_caps_lock_led(manipulate_caps_lock_led);
+          return;
+        }
+      }
+    }
+
+    bool get_device_disable_built_in_keyboard_if_exists(const device_identifiers& identifiers) const {
       for (const auto& d : devices_) {
         if (d.get_identifiers() == identifiers) {
           return d.get_disable_built_in_keyboard_if_exists();
@@ -186,23 +260,32 @@ public:
       }
       return false;
     }
-    void set_device_disable_built_in_keyboard_if_exists(const device::identifiers& identifiers,
+    void set_device_disable_built_in_keyboard_if_exists(const device_identifiers& identifiers,
                                                         bool disable_built_in_keyboard_if_exists) {
+      add_device(identifiers);
+
       for (auto&& device : devices_) {
         if (device.get_identifiers() == identifiers) {
           device.set_disable_built_in_keyboard_if_exists(disable_built_in_keyboard_if_exists);
           return;
         }
       }
+    }
+
+  private:
+    void add_device(const device_identifiers& identifiers) {
+      for (auto&& device : devices_) {
+        if (device.get_identifiers() == identifiers) {
+          return;
+        }
+      }
 
       auto json = nlohmann::json({
           {"identifiers", identifiers.to_json()},
-          {"disable_built_in_keyboard_if_exists", disable_built_in_keyboard_if_exists},
       });
       devices_.emplace_back(json);
     }
 
-  private:
     nlohmann::json json_;
     std::string name_;
     bool selected_;
@@ -241,18 +324,13 @@ public:
           try {
             json_ = nlohmann::json::parse(input);
 
-            {
-              const std::string key = "global";
-              if (json_.find(key) != json_.end()) {
-                global_configuration_ = global_configuration(json_[key]);
-              }
+            if (auto v = json_utility::find_object(json_, "global")) {
+              global_configuration_ = global_configuration(*v);
             }
-            {
-              const std::string key = "profiles";
-              if (json_.find(key) != json_.end() && json_[key].is_array()) {
-                for (const auto& profile_json : json_[key]) {
-                  profiles_.emplace_back(profile_json);
-                }
+
+            if (auto v = json_utility::find_array(json_, "profiles")) {
+              for (const auto& profile_json : *v) {
+                profiles_.emplace_back(profile_json);
               }
             }
 
@@ -261,6 +339,8 @@ public:
             json_ = nlohmann::json();
             loaded_ = false;
           }
+        } else {
+          logger::get_logger().error("Failed to open {0}", file_path);
         }
       }
     }
@@ -339,14 +419,7 @@ public:
 
   bool save_to_file(const std::string& file_path) {
     filesystem::create_directory_with_intermediate_directories(filesystem::dirname(file_path), 0700);
-
-    std::ofstream output(file_path);
-    if (!output) {
-      return false;
-    }
-
-    output << std::setw(4) << to_json() << std::endl;
-    return true;
+    return json_utility::save_to_file(to_json(), file_path);
   }
 
 private:
@@ -383,10 +456,6 @@ inline void to_json(nlohmann::json& json, const core_configuration::profile::com
 
 inline void to_json(nlohmann::json& json, const core_configuration::profile::virtual_hid_keyboard& virtual_hid_keyboard) {
   json = virtual_hid_keyboard.to_json();
-}
-
-inline void to_json(nlohmann::json& json, const core_configuration::profile::device::identifiers& identifiers) {
-  json = identifiers.to_json();
 }
 
 inline void to_json(nlohmann::json& json, const core_configuration::profile::device& device) {

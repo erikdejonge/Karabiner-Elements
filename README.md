@@ -3,7 +3,10 @@
 
 # Karabiner-Elements
 
-Karabiner-Elements provides a subset of the features planned for the next generation [Karabiner](https://pqrs.org/osx/karabiner) for macOS Sierra. The current version of Karabiner does not work with Sierra, so Karabiner-Elements was created to keep Sierra users up and running until a new version of Karabiner is published.
+Karabiner-Elements is a powerful utility for keyboard customization on macOS Sierra or later.
+
+[Karabiner](https://pqrs.org/osx/karabiner) stopped working because of the keyboard driver architecture changes at macOS Sierra.
+Thus, Karabiner-Elements was made from scratch for new macOS.
 
 ## Karabiner build
 * 22 oktober 2016: [Karabiner-Elements-0.90.37.dmg](https://raw.githubusercontent.com/erikdejonge/Karabiner-Elements/master/Karabiner-Elements-0.90.37.dmg)
@@ -13,7 +16,7 @@ Karabiner-Elements provides a subset of the features planned for the next genera
 
 Karabiner-Elements is ready to use today. It provides a useful subset of Karabiner's features that you can begin using immediately.
 
-You can download the latest Karabiner-Elements from https://pqrs.org/latest/karabiner-elements-latest.dmg
+You can download the latest Karabiner-Elements from https://pqrs.org/osx/karabiner/
 
 ### Old releases
 
@@ -22,40 +25,19 @@ https://github.com/tekezo/pqrs.org/tree/master/webroot/osx/karabiner/files
 
 ## System requirements
 
-* OS X 10.11.*
-* OS X 10.12.*
-* OS X 10.13.*
+* macOS 10.12.*
+* macOS 10.13.*
 
 # Usage
 
-Detailed usage instructions are provided in [the Usage README](usage/README.md).
-
-## Features
-
-* Secure Keyboard Entry: Support [secure entry](https://security.stackexchange.com/questions/47749/how-secure-is-secure-keyboard-entry-in-mac-os-xs-terminal) in the Terminal, Password prompt etc.
-* Modifier Flag Sync: Synchronize modifier flags across all connected keyboards.
-* Simple Modifications: Map normal keys to arbitrary key functions.
-* Function Keys: Map function keys to arbitrary key functions.
-* Complex Modifications: Map keys by complex rules. eg key to modifiers, modifiers+key to key, send key event if pressed alone, etc.
-* Devices: Apply modifications to specified keyboards only.
-* Virtual Keyboard: Set the virtual keyboard's type (ANSI, ISO, JIS) and its Caps Lock Delay.
-* Profiles: Support the creation of multiple profiles that the user can switch between.
-* Inverted Function Keys: Invert the functionality of the function keys with regard to the <kbd>fn</kbd> modifier.
-* Log Keyboard Events: Render the keyboard events log.
-* Log Application Events: Render the Karabiner-Elements event log.
-* Misc: Enable automatic updates, delete Karabiner Elements etc.
-
-## Limitations
-
-* Karabiner-Elements cannot modify eject key due to the limitation of macOS API.
-* Karabiner-Elements ignores the `System Preferences > Keyboard > Modifier Keys...` configuration.
+https://pqrs.org/osx/karabiner/document.html
 
 ## How to build
 
 System requirements:
 
-* OS X 10.11+
-* Xcode 8+
+* macOS 10.13+
+* Xcode 9+
 * Command Line Tools for Xcode
 * Boost 1.61.0+ (header-only) http://www.boost.org/
 
@@ -83,4 +65,4 @@ The **make** script will create a redistributable **Karabiner-Elements-VERSION.d
 
 # Donations
 
-If you would like to contribute financially to the development of Karabiner Elements, donations can be made via https://pqrs.org/osx/karabiner/donation.html.en.
+If you would like to contribute financially to the development of Karabiner Elements, donations can be made via https://pqrs.org/osx/karabiner/pricing.html

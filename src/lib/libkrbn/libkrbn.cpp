@@ -2,7 +2,9 @@
 #include "application_launcher.hpp"
 #include "constants.hpp"
 #include "core_configuration.hpp"
+#include "json_utility.hpp"
 #include "launchctl_utility.hpp"
+#include "libkrbn_cpp.hpp"
 #include "process_utility.hpp"
 #include "thread_utility.hpp"
 #include "types.hpp"
@@ -28,12 +30,20 @@ const char* libkrbn_get_distributed_notification_console_user_server_is_disabled
   return krbn::constants::get_distributed_notification_console_user_server_is_disabled();
 }
 
+const char* libkrbn_get_distributed_notification_device_grabbing_state_is_changed(void) {
+  return krbn::constants::get_distributed_notification_device_grabbing_state_is_changed();
+}
+
 const char* libkrbn_get_grabber_alerts_json_file_path(void) {
   return krbn::constants::get_grabber_alerts_json_file_path();
 }
 
 const char* libkrbn_get_devices_json_file_path(void) {
   return krbn::constants::get_devices_json_file_path();
+}
+
+const char* libkrbn_get_device_details_json_file_path(void) {
+  return krbn::constants::get_device_details_json_file_path();
 }
 
 const char* libkrbn_get_manipulator_environment_json_file_path(void) {
@@ -55,12 +65,8 @@ void libkrbn_unlock_single_application(void) {
 bool libkrbn_save_beautified_json_string(const char* _Nonnull file_path, const char* _Nonnull json_string) {
   try {
     // nlohmann::json sorts dictionary keys.
-    std::ofstream stream(file_path);
-    if (stream) {
-      auto json = nlohmann::json::parse(json_string);
-      stream << std::setw(4) << json << std::endl;
-      return true;
-    }
+    auto json = nlohmann::json::parse(json_string);
+    return krbn::json_utility::save_to_file(json, file_path);
   } catch (std::exception& e) {
   }
   return false;
@@ -68,6 +74,10 @@ bool libkrbn_save_beautified_json_string(const char* _Nonnull file_path, const c
 
 void libkrbn_launchctl_manage_console_user_server(bool load) {
   krbn::launchctl_utility::manage_console_user_server(load);
+}
+
+void libkrbn_launchctl_restart_console_user_server(void) {
+  krbn::launchctl_utility::restart_console_user_server();
 }
 
 void libkrbn_check_for_updates_in_background(void) {
@@ -80,6 +90,10 @@ void libkrbn_check_for_updates_stable_only(void) {
 
 void libkrbn_check_for_updates_with_beta_version(void) {
   krbn::update_utility::check_for_updates_with_beta_version();
+}
+
+void libkrbn_check_for_updates_on_startup(void) {
+  krbn::update_utility::check_for_updates_on_startup();
 }
 
 void libkrbn_launch_event_viewer(void) {
@@ -96,4 +110,25 @@ void libkrbn_launch_preferences(void) {
 
 bool libkrbn_system_core_configuration_file_path_exists(void) {
   return krbn::filesystem::exists(krbn::constants::get_system_core_configuration_file_path());
+}
+
+void libkrbn_get_key_code_name(char* buffer, size_t length, uint32_t key_code) {
+  buffer[0] = '\0';
+  if (auto name = krbn::types::make_key_code_name(krbn::key_code(key_code))) {
+    strlcpy(buffer, name->c_str(), length);
+  }
+}
+
+void libkrbn_get_consumer_key_code_name(char* buffer, size_t length, uint32_t consumer_key_code) {
+  buffer[0] = '\0';
+  if (auto name = krbn::types::make_consumer_key_code_name(krbn::consumer_key_code(consumer_key_code))) {
+    strlcpy(buffer, name->c_str(), length);
+  }
+}
+
+bool libkrbn_device_identifiers_is_apple(const libkrbn_device_identifiers* p) {
+  if (p) {
+    return libkrbn_cpp::make_device_identifiers(*p).is_apple();
+  }
+  return false;
 }

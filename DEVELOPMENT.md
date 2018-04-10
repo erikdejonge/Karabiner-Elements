@@ -42,6 +42,35 @@ The highest layer is IOHIDQueue which provides us the HID values.
 
 `karabiner_grabber` uses this method.
 
+### IOKit with Apple Trackpads
+
+IOKit cannot catch events from Apple Trackpads.<br />
+(== Apple Trackpad driver does not send events to IOKit.)
+
+Thus, we should use CGEventTap together for pointing devices.
+
+### `IOHIDQueueRegisterValueAvailableCallback` from multiple processes.
+
+We can use `IOHIDDeviceOpen` and `IOHIDQueueRegisterValueAvailableCallback` from multiple processes.
+
+Generally, `ValueAvailableCallback` is not called for `IOHIDDeviceOpen(kIOHIDOptionsTypeNone)` while device is opened with `kIOHIDOptionsTypeSeizeDevice`.
+However, it seems `ValueAvailableCallback` is called both seized `IOHIDDeviceRef` and normal `IOHIDDeviceRef` in some cases (e.g. after awake from sleep)
+
+### `IOHIDQueueRegisterValueAvailableCallback` from multiple IOHIDDeviceRef for one device
+
+We can create multiple IOHIDDeviceRef for one device by using `IOHIDDeviceCreate`.
+In this case, `ValueAvailableCallback` is called both seized `IOHIDDeviceRef` and normal `IOHIDDeviceRef`.
+
+```
+// IOHIDDeviceRef device1 is passed by IOHIDManagerRegisterDeviceMatchingCallback
+IOHIDDeviceRef device2 = IOHIDDeviceCreate(kCFAllocatorDefault, IOHIDDeviceGetService(device1));
+
+IOHIDDeviceOpen(device1, kIOHIDOptionsTypeNone);
+IOHIDDeviceOpen(device2, kIOHIDOptionsTypeSeizeDevice);
+
+// ValueAvailableCallback is called both device1 and device2 even device2 seizes the device. (on macOS 10.13.4)
+```
+
 ## CGEventTapCreate
 
 `CGEventTapCreate` is a limited approach.<br />
@@ -49,22 +78,31 @@ It does not work with Secure Keyboard Entry even if we use `kCGHIDEventTap` and 
 Thus, it does not work in Terminal.<br />
 You can confirm this behavior in `appendix/eventtap`.
 
-However, we should modify mouse event's modifier flags manually.
-Thus, `karabiner_grabber` uses this method to modify mouse events.
+There is another problem with `CGEventTapCreate`.<br />
+`Shake mouse pointer to locate` feature will be stopped after we call `CGEventTapCreate` with `kCGEventTapOptionDefault`.<br />
+(We confirmed the problem at least on macOS 10.13.1.)<br />
+
+`karabiner_grabber` uses `CGEventTapCreate` with `kCGEventTapOptionListenOnly` in order to catch Apple mouse/trackpad events which we cannot catch in IOKit.
+(See above note.)
 
 --------------------------------------------------------------------------------
 
 # The difference of event posting methods
 
-## IOKit call IOHIKeyboard::dispatchKeyboardEvent in kext
-
-It requires posting HID usage page and usage.
-`karabiner_grabber` uses this method by using `Karabiner-VirtualHIDDevice`.
-
 ## IOKit device report in kext
 
 It requires posting HID events.<br />
 The IOHIKeyboard processes the reports by passing reports to `handleReport`.
+
+`karabiner_grabber` uses this method by using `Karabiner-VirtualHIDDevice`.
+
+Note: `handleReport` fails to treat events which usage page are `kHIDPage_AppleVendorKeyboard` or `kHIDPage_AppleVendorTopCase` on macOS 10.11 or earlier.
+
+## IOKit call IOHIKeyboard::dispatchKeyboardEvent in kext
+
+It requires posting HID usage page and usage.
+
+Caution: IOHIDValue observers cannot receive events that are posted via `dispatchKeyboardEvent`.
 
 ## IOHIDPostEvent
 
@@ -151,3 +189,13 @@ uint8_t reserved;
 uint8_t keys[6];
 uint8_t extra_modifiers; // fn
 ```
+
+--------------------------------------------------------------------------------
+
+# Kernel extensions location
+
+There is a macOS problem that macOS load old kext from cache after we update a kext file in /Library/Extensions.
+(It seems macOS failed to update kext cache.)
+
+Thus, Karabiner-VirtualHIDDevice adds the version number to the kext directory name and put kext file into `/Library/Application Support` where is described TN2459.
+https://developer.apple.com/library/content/technotes/tn2459/_index.html

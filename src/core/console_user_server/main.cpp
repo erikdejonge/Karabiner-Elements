@@ -1,12 +1,14 @@
 #include "connection_manager.hpp"
 #include "constants.hpp"
 #include "filesystem.hpp"
+#include "grabber_alerts_monitor.hpp"
 #include "karabiner_version.h"
 #include "logger.hpp"
 #include "migration.hpp"
 #include "process_utility.hpp"
 #include "spdlog_utility.hpp"
 #include "thread_utility.hpp"
+#include "update_utility.hpp"
 #include "version_monitor.hpp"
 
 int main(int argc, const char* argv[]) {
@@ -42,12 +44,19 @@ int main(int argc, const char* argv[]) {
     exit(0);
   });
 
+  auto grabber_alerts_monitor_ptr = std::make_unique<krbn::grabber_alerts_monitor>([] {
+    krbn::logger::get_logger().info("karabiner_grabber_alerts.json is updated.");
+    krbn::application_launcher::launch_preferences();
+  });
+
   krbn::migration::migrate_v1();
 
   krbn::filesystem::create_directory_with_intermediate_directories(krbn::constants::get_user_configuration_directory(), 0700);
   krbn::filesystem::create_directory_with_intermediate_directories(krbn::constants::get_user_complex_modifications_assets_directory(), 0700);
 
   krbn::connection_manager manager(*version_monitor_ptr);
+
+  krbn::update_utility::check_for_updates_on_startup();
 
   CFRunLoopRun();
 

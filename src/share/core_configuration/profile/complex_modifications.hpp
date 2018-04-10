@@ -8,7 +8,10 @@ public:
     }
 
     parameters(const nlohmann::json& json) : json_(json),
-                                             basic_to_if_alone_timeout_milliseconds_(1000) {
+                                             basic_simultaneous_threshold_milliseconds_(50),
+                                             basic_to_if_alone_timeout_milliseconds_(1000),
+                                             basic_to_if_held_down_threshold_milliseconds_(500),
+                                             basic_to_delayed_action_delay_milliseconds_(500) {
       update(json);
     }
 
@@ -20,21 +23,39 @@ public:
       return j;
     }
 
-    void update(const nlohmann::json& json) {
-      for (const auto& pair : make_map()) {
-        if (json.find(pair.first) != json.end() && json[pair.first].is_number()) {
-          const_cast<int&>(pair.second) = json[pair.first];
-        }
-      }
+    int get_basic_simultaneous_threshold_milliseconds(void) const {
+      return basic_simultaneous_threshold_milliseconds_;
     }
 
-    int get_value(const std::string& name) const {
+    int get_basic_to_if_alone_timeout_milliseconds(void) const {
+      return basic_to_if_alone_timeout_milliseconds_;
+    }
+
+    int get_basic_to_if_held_down_threshold_milliseconds(void) const {
+      return basic_to_if_held_down_threshold_milliseconds_;
+    }
+
+    int get_basic_to_delayed_action_delay_milliseconds(void) const {
+      return basic_to_delayed_action_delay_milliseconds_;
+    }
+
+    void update(const nlohmann::json& json) {
+      for (const auto& pair : make_map()) {
+        if (auto v = json_utility::find_optional<int>(json, pair.first)) {
+          const_cast<int&>(pair.second) = *v;
+        }
+      }
+
+      normalize();
+    }
+
+    boost::optional<int> get_value(const std::string& name) const {
       auto map = make_map();
       auto it = map.find(name);
       if (it != std::end(map)) {
         return it->second;
       }
-      return 0;
+      return boost::none;
     }
 
     void set_value(const std::string& name, int value) {
@@ -43,21 +64,48 @@ public:
       if (it != std::end(map)) {
         const_cast<int&>(it->second) = value;
       }
-    }
 
-    int get_basic_to_if_alone_timeout_milliseconds(void) const {
-      return basic_to_if_alone_timeout_milliseconds_;
+      normalize();
     }
 
   private:
+    void normalize(void) {
+      normalize(basic_simultaneous_threshold_milliseconds_, 0, 1000, "basic.simultaneous_threshold_milliseconds");
+      normalize(basic_to_if_alone_timeout_milliseconds_, 0, boost::none, "basic.to_if_alone_timeout_milliseconds");
+      normalize(basic_to_if_held_down_threshold_milliseconds_, 0, boost::none, "basic.to_if_held_down_threshold_milliseconds");
+      normalize(basic_to_delayed_action_delay_milliseconds_, 0, boost::none, "basic.to_delayed_action_delay_milliseconds");
+    }
+
+    void normalize(int& value, boost::optional<int> min, boost::optional<int> max, const std::string& name) {
+      if (min) {
+        if (value < *min) {
+          logger::get_logger().warn("{0} should be >= {1}.", name, *min);
+        }
+        value = std::max(value, *min);
+      }
+
+      if (max) {
+        if (value > *max) {
+          logger::get_logger().warn("{0} should be <= {1}.", name, *max);
+        }
+        value = std::min(value, *max);
+      }
+    }
+
     std::unordered_map<std::string, const int&> make_map(void) const {
       return {
+          {"basic.simultaneous_threshold_milliseconds", basic_simultaneous_threshold_milliseconds_},
           {"basic.to_if_alone_timeout_milliseconds", basic_to_if_alone_timeout_milliseconds_},
+          {"basic.to_if_held_down_threshold_milliseconds", basic_to_if_held_down_threshold_milliseconds_},
+          {"basic.to_delayed_action_delay_milliseconds", basic_to_delayed_action_delay_milliseconds_},
       };
     }
 
     nlohmann::json json_;
+    int basic_simultaneous_threshold_milliseconds_;
     int basic_to_if_alone_timeout_milliseconds_;
+    int basic_to_if_held_down_threshold_milliseconds_;
+    int basic_to_delayed_action_delay_milliseconds_;
   };
 
   class rule final {
@@ -79,19 +127,14 @@ public:
 
       manipulator(const nlohmann::json& json, const parameters& parameters) : json_(json),
                                                                               parameters_(parameters) {
-        {
-          const std::string key = "conditions";
-          if (json.find(key) != json.end() && json[key].is_array()) {
-            for (const auto& j : json[key]) {
-              conditions_.emplace_back(j);
-            }
+        if (auto v = json_utility::find_array(json, "conditions")) {
+          for (const auto& j : *v) {
+            conditions_.emplace_back(j);
           }
         }
-        {
-          const std::string key = "parameters";
-          if (json.find(key) != json.end()) {
-            parameters_.update(json[key]);
-          }
+
+        if (auto v = json_utility::find_object(json, "parameters")) {
+          parameters_.update(*v);
         }
       }
 
@@ -114,12 +157,9 @@ public:
     };
 
     rule(const nlohmann::json& json, const parameters& parameters) : json_(json) {
-      {
-        const std::string key = "manipulators";
-        if (json.find(key) != json.end() && json[key].is_array()) {
-          for (const auto& j : json[key]) {
-            manipulators_.emplace_back(j, parameters);
-          }
+      if (auto v = json_utility::find_array(json, "manipulators")) {
+        for (const auto& j : *v) {
+          manipulators_.emplace_back(j, parameters);
         }
       }
 
@@ -142,15 +182,8 @@ public:
 
   private:
     boost::optional<std::string> find_description(const nlohmann::json& json) const {
-      {
-        const std::string key = "description";
-        if (json.find(key) != json.end()) {
-          if (json[key].is_string()) {
-            return json[key].get<std::string>();
-          } else {
-            return std::string("");
-          }
-        }
+      if (auto v = json_utility::find_optional<std::string>(json, "description")) {
+        return *v;
       }
 
       if (json.is_array() || json.is_object()) {
@@ -171,13 +204,10 @@ public:
   };
 
   complex_modifications(const nlohmann::json& json) : json_(json),
-                                                      parameters_(json.find("parameters") != std::end(json) ? json["parameters"] : nlohmann::json()) {
-    {
-      const std::string key = "rules";
-      if (json_.find(key) != json_.end() && json_[key].is_array()) {
-        for (const auto& j : json_[key]) {
-          rules_.emplace_back(j, parameters_);
-        }
+                                                      parameters_(json_utility::find_copy(json, "parameters", nlohmann::json())) {
+    if (auto v = json_utility::find_array(json, "rules")) {
+      for (const auto& j : *v) {
+        rules_.emplace_back(j, parameters_);
       }
     }
   }
@@ -216,6 +246,36 @@ public:
         index2 < rules_.size()) {
       std::swap(rules_[index1], rules_[index2]);
     }
+  }
+
+  boost::optional<std::pair<int, int>> minmax_parameter_value(const std::string& name) const {
+    boost::optional<std::pair<int, int>> result;
+
+    if (auto value = parameters_.get_value(name)) {
+      if (!result) {
+        result = std::make_pair(*value, *value);
+      } else if (*value < result->first) {
+        result->first = *value;
+      } else if (*value > result->second) {
+        result->second = *value;
+      }
+    }
+
+    for (const auto& r : rules_) {
+      for (const auto& m : r.get_manipulators()) {
+        if (auto value = m.get_parameters().get_value(name)) {
+          if (!result) {
+            result = std::make_pair(*value, *value);
+          } else if (*value < result->first) {
+            result->first = *value;
+          } else if (*value > result->second) {
+            result->second = *value;
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
 private:

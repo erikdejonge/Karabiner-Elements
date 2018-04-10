@@ -4,7 +4,9 @@
 
 @interface EventQueue : NSObject
 
-- (void)pushFromNSApplication:(NSEvent*)event;
+@property(readonly) NSInteger observedDeviceCount;
+
+- (void)setup;
 - (void)pushMouseEvent:(NSEvent*)event;
 
 @end

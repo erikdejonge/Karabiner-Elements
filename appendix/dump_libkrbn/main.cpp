@@ -1,6 +1,35 @@
 #include "../../src/lib/libkrbn/libkrbn.h"
+#include "gcd_utility.hpp"
 #include "thread_utility.hpp"
+#include <CoreFoundation/CoreFoundation.h>
 #include <iostream>
+
+namespace {
+void hid_value_observer_callback(libkrbn_hid_value_type type,
+                                 uint32_t value,
+                                 libkrbn_hid_value_event_type event_type,
+                                 void* refcon) {
+  char buffer[256];
+
+  switch (type) {
+    case libkrbn_hid_value_type_key_code:
+      libkrbn_get_key_code_name(buffer, sizeof(buffer), value);
+      std::cout << "hid_value_observer_callback"
+                << " " << buffer
+                << " event_type:" << event_type
+                << std::endl;
+      break;
+
+    case libkrbn_hid_value_type_consumer_key_code:
+      libkrbn_get_consumer_key_code_name(buffer, sizeof(buffer), value);
+      std::cout << "hid_value_observer_callback"
+                << " " << buffer
+                << " event_type:" << event_type
+                << std::endl;
+      break;
+  }
+}
+} // namespace
 
 int main(int argc, const char* argv[]) {
   krbn::thread_utility::register_main_thread();
@@ -29,6 +58,21 @@ int main(int argc, const char* argv[]) {
       libkrbn_complex_modifications_assets_manager_terminate(&manager);
     }
   }
+
+  libkrbn_hid_value_observer* observer = nullptr;
+  libkrbn_hid_value_observer_initialize(&observer, hid_value_observer_callback, nullptr);
+
+  krbn::gcd_utility::main_queue_after_timer timer(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),
+                                                  false,
+                                                  ^{
+                                                    std::cout << "observed_device_count: "
+                                                              << libkrbn_hid_value_observer_calculate_observed_device_count(observer)
+                                                              << std::endl;
+                                                  });
+
+  CFRunLoopRun();
+
+  libkrbn_hid_value_observer_terminate(&observer);
 
   std::cout << std::endl;
 

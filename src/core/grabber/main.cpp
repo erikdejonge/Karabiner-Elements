@@ -1,14 +1,13 @@
+#include "apple_notification_center.hpp"
 #include "connection_manager.hpp"
 #include "constants.hpp"
 #include "filesystem.hpp"
 #include "grabber_alerts_manager.hpp"
 #include "karabiner_version.h"
 #include "logger.hpp"
-#include "notification_center.hpp"
 #include "process_utility.hpp"
 #include "thread_utility.hpp"
 #include "version_monitor.hpp"
-#include "virtual_hid_device_client.hpp"
 #include <iostream>
 #include <sstream>
 #include <unistd.h>
@@ -57,7 +56,13 @@ int main(int argc, const char* argv[]) {
 
   // load kexts
   while (true) {
-    int exit_status = system("/sbin/kextload /Library/Extensions/org.pqrs.driver.Karabiner.VirtualHIDDevice.kext");
+    std::stringstream ss;
+    ss << "/sbin/kextload '"
+       << "/Library/Application Support/org.pqrs/Karabiner-VirtualHIDDevice/Extensions/"
+       << pqrs::karabiner_virtual_hid_device::get_kernel_extension_name()
+       << "'";
+    krbn::logger::get_logger().info(ss.str());
+    int exit_status = system(ss.str().c_str());
     exit_status >>= 8;
     krbn::logger::get_logger().info("kextload exit status: {0}", exit_status);
     if (exit_status == 27) {
@@ -90,12 +95,11 @@ int main(int argc, const char* argv[]) {
     chmod(krbn::constants::get_console_user_server_socket_directory(), 0755);
   }
 
-  auto virtual_hid_device_client_ptr = std::make_unique<krbn::virtual_hid_device_client>();
-  virtual_hid_device_client_ptr->connect();
-  auto device_grabber_ptr = std::make_unique<krbn::device_grabber>(*virtual_hid_device_client_ptr);
+  krbn::manipulator::manipulator_timer::get_instance().enable();
+  auto device_grabber_ptr = std::make_unique<krbn::device_grabber>();
   krbn::connection_manager connection_manager(*version_monitor_ptr, *device_grabber_ptr);
 
-  krbn::notification_center::post_distributed_notification_to_all_sessions(krbn::constants::get_distributed_notification_grabber_is_launched());
+  krbn::apple_notification_center::post_distributed_notification_to_all_sessions(krbn::constants::get_distributed_notification_grabber_is_launched());
 
   CFRunLoopRun();
 

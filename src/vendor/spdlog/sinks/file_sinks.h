@@ -5,10 +5,10 @@
 
 #pragma once
 
-#include <spdlog/sinks/base_sink.h>
-#include <spdlog/details/null_mutex.h>
-#include <spdlog/details/file_helper.h>
-#include <spdlog/fmt/fmt.h>
+#include "base_sink.h"
+#include "../details/null_mutex.h"
+#include "../details/file_helper.h"
+#include "../fmt/fmt.h"
 
 #include <algorithm>
 #include <chrono>
@@ -26,17 +26,14 @@ namespace sinks
  * Trivial file sink with single file as target
  */
 template<class Mutex>
-class simple_file_sink : public base_sink < Mutex >
+class simple_file_sink SPDLOG_FINAL : public base_sink < Mutex >
 {
 public:
     explicit simple_file_sink(const filename_t &filename, bool truncate = false):_force_flush(false)
     {
         _file_helper.open(filename, truncate);
     }
-    void flush() override
-    {
-        _file_helper.flush();
-    }
+
     void set_force_flush(bool force_flush)
     {
         _force_flush = force_flush;
@@ -48,6 +45,10 @@ protected:
         _file_helper.write(msg);
         if(_force_flush)
             _file_helper.flush();
+    }
+    void _flush() override
+    {
+        _file_helper.flush();
     }
 private:
     details::file_helper _file_helper;
@@ -61,7 +62,7 @@ typedef simple_file_sink<details::null_mutex> simple_file_sink_st;
  * Rotating file sink based on size
  */
 template<class Mutex>
-class rotating_file_sink : public base_sink < Mutex >
+class rotating_file_sink SPDLOG_FINAL : public base_sink < Mutex >
 {
 public:
     rotating_file_sink(const filename_t &base_filename,
@@ -76,9 +77,22 @@ public:
         _current_size = _file_helper.size(); //expensive. called only once
     }
 
-    void flush() override
+    // calc filename according to index and file extension if exists.
+    // e.g. calc_filename("logs/mylog.txt, 3) => "logs/mylog.3.txt".
+    static filename_t calc_filename(const filename_t& filename, std::size_t index)
     {
-        _file_helper.flush();
+        std::conditional<std::is_same<filename_t::value_type, char>::value, fmt::MemoryWriter, fmt::WMemoryWriter>::type w;
+        if (index)
+        {
+            filename_t basename, ext;
+            std::tie(basename, ext) = details::file_helper::split_by_extenstion(filename);
+            w.write(SPDLOG_FILENAME_T("{}.{}{}"), basename, index, ext);
+        }
+        else
+        {
+            w.write(SPDLOG_FILENAME_T("{}"), filename);
+        }
+        return w.str();
     }
 
 protected:
@@ -93,23 +107,18 @@ protected:
         _file_helper.write(msg);
     }
 
-private:
-    static filename_t calc_filename(const filename_t& filename, std::size_t index)
+    void _flush() override
     {
-        std::conditional<std::is_same<filename_t::value_type, char>::value, fmt::MemoryWriter, fmt::WMemoryWriter>::type w;
-        if (index)
-            w.write(SPDLOG_FILENAME_T("{}.{}"), filename, index);
-        else
-            w.write(SPDLOG_FILENAME_T("{}"), filename);
-        return w.str();
+        _file_helper.flush();
     }
 
-    // Rotate files:
-    // log.txt -> log.txt.1
-    // log.txt.1 -> log.txt.2
-    // log.txt.2 -> log.txt.3
-    // lo3.txt.3 -> delete
 
+private:
+    // Rotate files:
+    // log.txt -> log.1.txt
+    // log.1.txt -> log.2.txt
+    // log.2.txt -> log.3.txt
+    // log.3.txt -> delete
     void _rotate()
     {
         using details::os::filename_to_str;
@@ -148,27 +157,31 @@ typedef rotating_file_sink<details::null_mutex>rotating_file_sink_st;
  */
 struct default_daily_file_name_calculator
 {
-    // Create filename for the form basename.YYYY-MM-DD_hh-mm
-    static filename_t calc_filename(const filename_t& basename)
+    // Create filename for the form filename.YYYY-MM-DD_hh-mm.ext
+    static filename_t calc_filename(const filename_t& filename)
     {
         std::tm tm = spdlog::details::os::localtime();
+        filename_t basename, ext;
+        std::tie(basename, ext) = details::file_helper::split_by_extenstion(filename);
         std::conditional<std::is_same<filename_t::value_type, char>::value, fmt::MemoryWriter, fmt::WMemoryWriter>::type w;
-        w.write(SPDLOG_FILENAME_T("{}_{:04d}-{:02d}-{:02d}_{:02d}-{:02d}"), basename, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min);
+        w.write(SPDLOG_FILENAME_T("{}_{:04d}-{:02d}-{:02d}_{:02d}-{:02d}{}"), basename, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, ext);
         return w.str();
     }
 };
 
 /*
- * Generator of daily log file names in format basename.YYYY-MM-DD
+ * Generator of daily log file names in format basename.YYYY-MM-DD.ext
  */
 struct dateonly_daily_file_name_calculator
 {
     // Create filename for the form basename.YYYY-MM-DD
-    static filename_t calc_filename(const filename_t& basename)
+    static filename_t calc_filename(const filename_t& filename)
     {
         std::tm tm = spdlog::details::os::localtime();
+        filename_t basename, ext;
+        std::tie(basename, ext) = details::file_helper::split_by_extenstion(filename);
         std::conditional<std::is_same<filename_t::value_type, char>::value, fmt::MemoryWriter, fmt::WMemoryWriter>::type w;
-        w.write(SPDLOG_FILENAME_T("{}_{:04d}-{:02d}-{:02d}"), basename, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+        w.write(SPDLOG_FILENAME_T("{}_{:04d}-{:02d}-{:02d}{}"), basename, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, ext);
         return w.str();
     }
 };
@@ -177,7 +190,7 @@ struct dateonly_daily_file_name_calculator
  * Rotating file sink based on date. rotates at midnight
  */
 template<class Mutex, class FileNameCalc = default_daily_file_name_calculator>
-class daily_file_sink :public base_sink < Mutex >
+class daily_file_sink SPDLOG_FINAL :public base_sink < Mutex >
 {
 public:
     //create daily file sink which rotates on given time
@@ -194,10 +207,6 @@ public:
         _file_helper.open(FileNameCalc::calc_filename(_base_filename));
     }
 
-    void flush() override
-    {
-        _file_helper.flush();
-    }
 
 protected:
     void _sink_it(const details::log_msg& msg) override
@@ -208,6 +217,11 @@ protected:
             _rotation_tp = _next_rotation_tp();
         }
         _file_helper.write(msg);
+    }
+
+    void _flush() override
+    {
+        _file_helper.flush();
     }
 
 private:

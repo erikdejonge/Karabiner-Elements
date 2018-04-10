@@ -1,0 +1,39 @@
+[
+    {
+        "pointing_input": {
+            "buttons": [
+                "button11"
+            ],
+            "horizontal_wheel": 0,
+            "vertical_wheel": 0,
+            "x": 0,
+            "y": 0
+        },
+        "time_stamp": 5000000,
+        "type": "pointing_input"
+    },
+    {
+        "pointing_input": {
+            "buttons": [
+                "button11"
+            ],
+            "horizontal_wheel": 0,
+            "vertical_wheel": 0,
+            "x": 246,
+            "y": 0
+        },
+        "time_stamp": 6000000,
+        "type": "pointing_input"
+    },
+    {
+        "pointing_input": {
+            "buttons": [],
+            "horizontal_wheel": 0,
+            "vertical_wheel": 0,
+            "x": 0,
+            "y": 0
+        },
+        "time_stamp": 11000000,
+        "type": "pointing_input"
+    }
+]

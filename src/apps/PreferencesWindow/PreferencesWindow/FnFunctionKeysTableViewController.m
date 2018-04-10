@@ -3,11 +3,13 @@
 #import "NotificationKeys.h"
 #import "SimpleModificationsTableCellView.h"
 #import "SimpleModificationsTableViewController.h"
+#import "SimpleModificationsTargetDeviceMenuManager.h"
 #import "weakify.h"
 
 @interface FnFunctionKeysTableViewController ()
 
 @property(weak) IBOutlet NSTableView* tableView;
+@property(weak) IBOutlet NSPopUpButton* connectedDevicesPopupButton;
 
 @end
 
@@ -19,7 +21,17 @@
                                                      queue:[NSOperationQueue mainQueue]
                                                 usingBlock:^(NSNotification* note) {
                                                   [self.tableView reloadData];
+                                                  [self updateConnectedDevicesMenu];
                                                 }];
+
+  [[NSNotificationCenter defaultCenter] addObserverForName:kKarabinerKitDevicesAreUpdated
+                                                    object:nil
+                                                     queue:[NSOperationQueue mainQueue]
+                                                usingBlock:^(NSNotification* note) {
+                                                  [self updateConnectedDevicesMenu];
+                                                }];
+
+  [self updateConnectedDevicesMenu];
 }
 
 - (void)dealloc {
@@ -32,12 +44,34 @@
   SimpleModificationsTableCellView* fromCellView = [self.tableView viewAtColumn:0 row:row makeIfNecessary:NO];
   SimpleModificationsTableCellView* toCellView = [self.tableView viewAtColumn:1 row:row makeIfNecessary:NO];
 
-  NSString* fromValue = fromCellView.textField.stringValue;
-  NSString* toValue = toCellView.popUpButton.selectedItem.representedObject;
+  NSString* from = [KarabinerKitJsonUtility createJsonString:@{
+    @"key_code" : fromCellView.textField.stringValue,
+  }];
+  NSString* to = toCellView.popUpButton.selectedItem.representedObject;
 
   KarabinerKitCoreConfigurationModel* coreConfigurationModel = [KarabinerKitConfigurationManager sharedManager].coreConfigurationModel;
-  [coreConfigurationModel setSelectedProfileFnFunctionKey:fromValue to:toValue];
+
+  [coreConfigurationModel setSelectedProfileFnFunctionKey:from
+                                                       to:to
+                                     connectedDeviceIndex:self.selectedConnectedDeviceIndex];
   [coreConfigurationModel save];
+}
+
+- (IBAction)reloadTableView:(id)sender {
+  [self.tableView reloadData];
+}
+
+- (void)updateConnectedDevicesMenu {
+  self.connectedDevicesPopupButton.menu = [SimpleModificationsTargetDeviceMenuManager createMenu];
+  [self.tableView reloadData];
+}
+
+- (NSInteger)selectedConnectedDeviceIndex {
+  NSInteger index = self.connectedDevicesPopupButton.indexOfSelectedItem;
+  if (index < 0) {
+    return -1;
+  }
+  return index - 1;
 }
 
 @end

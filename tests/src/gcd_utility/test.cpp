@@ -1,4 +1,4 @@
-#define CATCH_CONFIG_RUNNER
+#define CATCH_CONFIG_MAIN
 #include "../../vendor/catch/catch.hpp"
 
 #include "gcd_utility.hpp"
@@ -9,6 +9,10 @@
 #include <iostream>
 #include <thread>
 
+TEST_CASE("initialize") {
+  krbn::thread_utility::register_main_thread();
+}
+
 TEST_CASE("main_queue_after_timer") {
   auto thread = std::thread([] {
     std::atomic<int> v(0);
@@ -16,6 +20,7 @@ TEST_CASE("main_queue_after_timer") {
 
     {
       krbn::gcd_utility::main_queue_after_timer timer(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                                                      true,
                                                       ^{
                                                         ++value;
                                                       });
@@ -36,6 +41,7 @@ TEST_CASE("main_queue_after_timer") {
       wrapper w;
       wrapper* p = &w;
       w.timer = std::make_shared<krbn::gcd_utility::main_queue_after_timer>(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                                                                            true,
                                                                             ^{
                                                                               // w is copied before timer was constructed.
                                                                               REQUIRE(w.timer.get() == nullptr);
@@ -58,6 +64,7 @@ TEST_CASE("main_queue_after_timer") {
 
         void set_timer(void) {
           timer_ = std::make_unique<krbn::gcd_utility::main_queue_after_timer>(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                                                                               true,
                                                                                ^{
                                                                                  // block binds `this`.
 
@@ -89,6 +96,7 @@ TEST_CASE("main_queue_after_timer") {
     {
       {
         krbn::gcd_utility::main_queue_after_timer timer(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                                                        true,
                                                         ^{
                                                           ++value;
                                                         });
@@ -107,9 +115,4 @@ TEST_CASE("main_queue_after_timer") {
   });
 
   CFRunLoopRun();
-}
-
-int main(int argc, char* const argv[]) {
-  krbn::thread_utility::register_main_thread();
-  return Catch::Session().run(argc, argv);
 }

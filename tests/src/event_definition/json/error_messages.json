@@ -1,31 +1,12 @@
 {
-    "from_event_definition": [
+    "to_event_definition": [
         {
-            "description": "Unknown modifier",
-            "key_code": "spacebar",
+            "description": "Invalid modifiers",
             "modifiers": {
                 "mandatory": [
-                    "shift",
-                    "unknown_modifier"
+                    "shift"
                 ]
             }
-        },
-        "not_object",
-        {
-            "description": "key_code is not string",
-            "key_code": 1234
-        },
-        {
-            "description": "pointing_button is not string",
-            "pointing_button": 1234
-        },
-        {
-            "description": "any is not string",
-            "any": 1234
-        },
-        {
-            "description": "any value is not known",
-            "any": "unknown_any"
         },
         {
             "description": "shell_command is not string",
@@ -34,11 +15,6 @@
         {
             "description": "set_variable is not object",
             "set_variable": 1234
-        },
-        {
-            "description": "Duplicated type description",
-            "key_code": "spacebar",
-            "pointing_button": "button1"
         },
         {
             "description": "set_variable.name is not found",
@@ -67,24 +43,12 @@
             }
         },
         {
-            "description": "Unknown key",
-            "unknown_key": "dummy"
+            "description": "lazy is not boolean",
+            "lazy": []
         },
         {
-            "description": "unknown modifiers",
-            "modifiers": {
-                "unknown_modifiers": "dummy"
-            }
-        }
-    ],
-    "to_event_definition": [
-        {
-            "description": "Invalid modifiers",
-            "modifiers": {
-                "mandatory": [
-                    "shift"
-                ]
-            }
+            "description": "repeat is not boolean",
+            "repeat": []
         }
     ]
 }

@@ -1,0 +1,190 @@
+[
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_type": "key_down",
+        "lazy": false,
+        "original_event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 2000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 2,
+        "event": {
+            "type": "event_from_ignored_device"
+        },
+        "event_type": "key_down",
+        "lazy": false,
+        "original_event": {
+            "key_code": "spacebar",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 4000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_type": "key_up",
+        "lazy": false,
+        "original_event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 6000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_type": "key_down",
+        "lazy": false,
+        "original_event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 8000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 2,
+        "event": {
+            "type": "event_from_ignored_device"
+        },
+        "event_type": "single",
+        "lazy": false,
+        "original_event": {
+            "pointing_motion": {
+                "vertical_wheel": 100
+            },
+            "type": "pointing_motion"
+        },
+        "event_time_stamp": {
+            "time_stamp": 10000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_type": "key_up",
+        "lazy": false,
+        "original_event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 12000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_type": "key_down",
+        "lazy": false,
+        "original_event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 14000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 2,
+        "event": {
+            "type": "event_from_ignored_device"
+        },
+        "event_type": "key_up",
+        "lazy": false,
+        "original_event": {
+            "key_code": "spacebar",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 16000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "type": "event_from_ignored_device"
+        },
+        "event_type": "single",
+        "lazy": false,
+        "original_event": {
+            "pointing_motion": {
+                "x": -10
+            },
+            "type": "pointing_motion"
+        },
+        "event_time_stamp": {
+            "time_stamp": 18000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "type": "event_from_ignored_device"
+        },
+        "event_type": "single",
+        "lazy": false,
+        "original_event": {
+            "pointing_motion": {
+                "vertical_wheel": 0
+            },
+            "type": "pointing_motion"
+        },
+        "event_time_stamp": {
+            "time_stamp": 20000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_type": "key_up",
+        "lazy": false,
+        "original_event": {
+            "key_code": "right_control",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 22000000
+        },
+        "valid": true
+    }
+]

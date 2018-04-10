@@ -22,17 +22,26 @@
 - (void)addProfile;
 - (void)removeProfileAtIndex:(NSUInteger)index;
 
-@property(readonly) NSUInteger selectedProfileSimpleModificationsCount;
-- (NSString*)selectedProfileSimpleModificationFirstAtIndex:(NSUInteger)index;
-- (NSString*)selectedProfileSimpleModificationSecondAtIndex:(NSUInteger)index;
-- (void)setSelectedProfileSimpleModificationAtIndex:(NSUInteger)index from:(NSString*)from to:(NSString*)to;
-- (void)addSimpleModificationToSelectedProfile;
-- (void)removeSelectedProfileSimpleModificationAtIndex:(NSUInteger)index;
+- (NSUInteger)selectedProfileSimpleModificationsCount:(NSInteger)connectedDeviceIndex;
+- (NSString*)selectedProfileSimpleModificationFromJsonStringAtIndex:(NSUInteger)index
+                                               connectedDeviceIndex:(NSInteger)connectedDeviceIndex;
+- (NSString*)selectedProfileSimpleModificationToJsonStringAtIndex:(NSUInteger)index
+                                             connectedDeviceIndex:(NSInteger)connectedDeviceIndex;
+- (void)setSelectedProfileSimpleModificationAtIndex:(NSUInteger)index
+                                               from:(NSString*)from
+                                                 to:(NSString*)to
+                               connectedDeviceIndex:(NSInteger)connectedDeviceIndex;
+- (void)addSimpleModificationToSelectedProfile:(NSInteger)connectedDeviceIndex;
+- (void)removeSelectedProfileSimpleModificationAtIndex:(NSUInteger)index connectedDeviceIndex:(NSInteger)connectedDeviceIndex;
 
-@property(readonly) NSUInteger selectedProfileFnFunctionKeysCount;
-- (NSString*)selectedProfileFnFunctionKeyFirstAtIndex:(NSUInteger)index;
-- (NSString*)selectedProfileFnFunctionKeySecondAtIndex:(NSUInteger)index;
-- (void)setSelectedProfileFnFunctionKey:(NSString*)from to:(NSString*)to;
+- (NSUInteger)selectedProfileFnFunctionKeysCount:(NSInteger)connectedDeviceIndex;
+- (NSString*)selectedProfileFnFunctionKeyFromJsonStringAtIndex:(NSUInteger)index
+                                          connectedDeviceIndex:(NSInteger)connectedDeviceIndex;
+- (NSString*)selectedProfileFnFunctionKeyToJsonStringAtIndex:(NSUInteger)index
+                                        connectedDeviceIndex:(NSInteger)connectedDeviceIndex;
+- (void)setSelectedProfileFnFunctionKey:(NSString*)from
+                                     to:(NSString*)to
+                   connectedDeviceIndex:(NSInteger)connectedDeviceIndex;
 
 @property(readonly) NSUInteger selectedProfileComplexModificationsRulesCount;
 - (NSString*)selectedProfileComplexModificationsRuleDescription:(NSUInteger)index;
@@ -41,26 +50,16 @@
 - (int)getSelectedProfileComplexModificationsParameter:(NSString*)name;
 - (void)setSelectedProfileComplexModificationsParameter:(NSString*)name value:(int)value;
 
-- (BOOL)selectedProfileDeviceIgnore:(NSUInteger)vendorId
-                          productId:(NSUInteger)productId
-                         isKeyboard:(BOOL)isKeyboard
-                   isPointingDevice:(BOOL)isPointingDevice;
-- (void)setSelectedProfileDeviceIgnore:(NSUInteger)vendorId
-                             productId:(NSUInteger)productId
-                            isKeyboard:(BOOL)isKeyboard
-                      isPointingDevice:(BOOL)isPointingDevice
+- (BOOL)selectedProfileDeviceIgnore:(const libkrbn_device_identifiers*)deviceIdentifiers;
+- (void)setSelectedProfileDeviceIgnore:(const libkrbn_device_identifiers*)deviceIdentifiers
                                  value:(BOOL)value;
-- (BOOL)selectedProfileDeviceDisableBuiltInKeyboardIfExists:(NSUInteger)vendorId
-                                                  productId:(NSUInteger)productId
-                                                 isKeyboard:(BOOL)isKeyboard
-                                           isPointingDevice:(BOOL)isPointingDevice;
-- (void)setSelectedProfileDeviceDisableBuiltInKeyboardIfExists:(NSUInteger)vendorId
-                                                     productId:(NSUInteger)productId
-                                                    isKeyboard:(BOOL)isKeyboard
-                                              isPointingDevice:(BOOL)isPointingDevice
+- (BOOL)selectedProfileDeviceManipulateCapsLockLed:(const libkrbn_device_identifiers*)deviceIdentifiers;
+- (void)setSelectedProfileDeviceManipulateCapsLockLed:(const libkrbn_device_identifiers*)deviceIdentifiers
+                                                value:(BOOL)value;
+- (BOOL)selectedProfileDeviceDisableBuiltInKeyboardIfExists:(const libkrbn_device_identifiers*)deviceIdentifiers;
+- (void)setSelectedProfileDeviceDisableBuiltInKeyboardIfExists:(const libkrbn_device_identifiers*)deviceIdentifiers
                                                          value:(BOOL)value;
 
-@property(copy) NSString* selectedProfileVirtualHIDKeyboardKeyboardType;
-@property NSInteger selectedProfileVirtualHIDKeyboardCapsLockDelayMilliseconds;
+@property NSInteger selectedProfileVirtualHIDKeyboardCountryCode;
 
 @end

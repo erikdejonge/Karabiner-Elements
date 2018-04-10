@@ -40,8 +40,9 @@
 		3431346E1DB70C900008F284 /* gcd_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = gcd_utility.hpp; sourceTree = "<group>"; };
 		343134701DB71BEC0008F284 /* thread_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = thread_utility.hpp; sourceTree = "<group>"; };
 		344149111D212A1600C8ECFC /* karabiner_grabber */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = karabiner_grabber; sourceTree = BUILT_PRODUCTS_DIR; };
+		3447719E1F80FEE7004CEFC3 /* keyboard_repeat_detector.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = keyboard_repeat_detector.hpp; sourceTree = "<group>"; };
 		34492B881DB12C9A0084F167 /* spdlog_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = spdlog_utility.hpp; sourceTree = "<group>"; };
-		345AC0021D620C8C009D1FB4 /* notification_center.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = notification_center.hpp; sourceTree = "<group>"; };
+		345AC0021D620C8C009D1FB4 /* apple_notification_center.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = apple_notification_center.hpp; sourceTree = "<group>"; };
 		345AC0041D62163F009D1FB4 /* boost_defs.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = boost_defs.hpp; sourceTree = "<group>"; };
 		345CCB4F1E902963005B61A8 /* event_queue.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = event_queue.hpp; sourceTree = "<group>"; };
 		345CCB511E914BDA005B61A8 /* base.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = base.hpp; path = include/manipulator/details/base.hpp; sourceTree = SOURCE_ROOT; };
@@ -55,9 +56,11 @@
 		3469EB701D814F140005D30D /* filesystem.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = filesystem.hpp; sourceTree = "<group>"; };
 		347113141D871C6C001AC60D /* process_monitor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = process_monitor.hpp; sourceTree = "<group>"; };
 		3476862C1E22A7A700A7DFAB /* cf_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = cf_utility.hpp; sourceTree = "<group>"; };
+		3482F5D81FD6DFF6003290B6 /* device_detail.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = device_detail.hpp; sourceTree = "<group>"; };
 		348FC00A1D9B76830083F98F /* virtual_hid_device_client.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = virtual_hid_device_client.hpp; sourceTree = "<group>"; };
+		3494274B1F9D736800A24707 /* krbn_notification_center.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = krbn_notification_center.hpp; sourceTree = "<group>"; };
 		349863321E784DC800DF3644 /* connected_devices.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = connected_devices.hpp; sourceTree = "<group>"; };
-		349950691D89A2EF004FE466 /* system_preferences.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = system_preferences.hpp; sourceTree = "<group>"; };
+		34A7D676205D769300031E7E /* virtual_hid_device_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = virtual_hid_device_utility.hpp; sourceTree = "<group>"; };
 		34A88A881D6840C200DD480B /* device_grabber.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = device_grabber.hpp; path = include/device_grabber.hpp; sourceTree = SOURCE_ROOT; };
 		34A88A891D6840C200DD480B /* receiver.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = receiver.hpp; path = include/receiver.hpp; sourceTree = SOURCE_ROOT; };
 		34A88A8F1D6840C200DD480B /* session.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = session.hpp; sourceTree = "<group>"; };
@@ -69,12 +72,14 @@
 		34BB0F0A1D22853700372174 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		34CFEC6D1D92D243004C61E1 /* event_tap_manager.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = event_tap_manager.hpp; path = include/event_tap_manager.hpp; sourceTree = SOURCE_ROOT; };
 		34D2FC841D9C120F00168D20 /* pointing_button_manager.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = pointing_button_manager.hpp; sourceTree = "<group>"; };
+		34D439961FDF9D9800F02DCD /* json_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = json_utility.hpp; sourceTree = "<group>"; };
 		34DA28A31D8FC8BE0029E37D /* service_observer.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = service_observer.hpp; sourceTree = "<group>"; };
 		34DA9F311ED8810C00D75501 /* stream_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = stream_utility.hpp; sourceTree = "<group>"; };
 		34DA9F341ED8824200D75501 /* post_event_to_virtual_devices.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = post_event_to_virtual_devices.hpp; path = include/manipulator/details/post_event_to_virtual_devices.hpp; sourceTree = SOURCE_ROOT; };
 		34DA9F371ED8827800D75501 /* manipulator_manager.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = manipulator_manager.hpp; path = include/manipulator/manipulator_manager.hpp; sourceTree = SOURCE_ROOT; };
 		34DA9F381ED8827800D75501 /* manipulator_managers_connector.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = manipulator_managers_connector.hpp; path = include/manipulator/manipulator_managers_connector.hpp; sourceTree = SOURCE_ROOT; };
 		34DA9F391EDB1E2A00D75501 /* time_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = time_utility.hpp; sourceTree = "<group>"; };
+		34E069C2205FB4E3006BAF05 /* system_preferences_utility.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = system_preferences_utility.hpp; sourceTree = "<group>"; };
 		34E420601D5042240022F821 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		34E9F62E1D2134770007AE90 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		34EED7101D6FA38400399AD1 /* apple_hid_usage_tables.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = apple_hid_usage_tables.hpp; sourceTree = "<group>"; };
@@ -138,6 +143,7 @@
 			isa = PBXGroup;
 			children = (
 				34EED7101D6FA38400399AD1 /* apple_hid_usage_tables.hpp */,
+				345AC0021D620C8C009D1FB4 /* apple_notification_center.hpp */,
 				345AC0041D62163F009D1FB4 /* boost_defs.hpp */,
 				3476862C1E22A7A700A7DFAB /* cf_utility.hpp */,
 				341424E81E685E5F00DFE6EC /* configuration_monitor.hpp */,
@@ -145,19 +151,22 @@
 				345EF8E91F1683BD003E7A67 /* console_user_server_client.hpp */,
 				341F59CA1D5167E900B441A8 /* constants.hpp */,
 				342BE67B1EF148BE00149985 /* core_configuration.hpp */,
+				3482F5D81FD6DFF6003290B6 /* device_detail.hpp */,
 				345CCB4F1E902963005B61A8 /* event_queue.hpp */,
 				3469EB701D814F140005D30D /* filesystem.hpp */,
 				3431346E1DB70C900008F284 /* gcd_utility.hpp */,
 				34EED7111D6FA38C00399AD1 /* human_interface_device.hpp */,
 				341F59DC1D5778A000B441A8 /* iokit_utility.hpp */,
 				3431346C1DB3CD8A0008F284 /* iopm_client.hpp */,
+				34D439961FDF9D9800F02DCD /* json_utility.hpp */,
 				34A88A941D68446C00DD480B /* karabiner_version.h */,
+				3447719E1F80FEE7004CEFC3 /* keyboard_repeat_detector.hpp */,
+				3494274B1F9D736800A24707 /* krbn_notification_center.hpp */,
 				341F59D11D5244F200B441A8 /* local_datagram_client.hpp */,
 				341C8E861D4CF1E10018D32C /* local_datagram_server.hpp */,
 				342BE67C1EF27CA300149985 /* logger.hpp */,
 				345EF8E01F0B354C003E7A67 /* manipulator_environment.hpp */,
 				34A88AA41D69C85600DD480B /* modifier_flag_manager.hpp */,
-				345AC0021D620C8C009D1FB4 /* notification_center.hpp */,
 				34D2FC841D9C120F00168D20 /* pointing_button_manager.hpp */,
 				347113141D871C6C001AC60D /* process_monitor.hpp */,
 				340C7F681E424F0E00F9B911 /* process_utility.hpp */,
@@ -165,12 +174,13 @@
 				34A88A8F1D6840C200DD480B /* session.hpp */,
 				34492B881DB12C9A0084F167 /* spdlog_utility.hpp */,
 				34DA9F311ED8810C00D75501 /* stream_utility.hpp */,
-				349950691D89A2EF004FE466 /* system_preferences.hpp */,
+				34E069C2205FB4E3006BAF05 /* system_preferences_utility.hpp */,
 				343134701DB71BEC0008F284 /* thread_utility.hpp */,
 				34DA9F391EDB1E2A00D75501 /* time_utility.hpp */,
 				34A88AA61D6DF89900DD480B /* types.hpp */,
 				3463EABD1E2E866000427A81 /* version_monitor.hpp */,
 				348FC00A1D9B76830083F98F /* virtual_hid_device_client.hpp */,
+				34A7D676205D769300031E7E /* virtual_hid_device_utility.hpp */,
 			);
 			name = share;
 			path = ../../share;
@@ -237,7 +247,7 @@
 		344149091D212A1600C8ECFC /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0800;
+				LastUpgradeCheck = 0900;
 				TargetAttributes = {
 					344149101D212A1600C8ECFC = {
 						CreatedOnToolsVersion = 7.3.1;
@@ -281,14 +291,20 @@
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
@@ -301,7 +317,6 @@
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_MISSING_NEWLINE = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
 				GCC_WARN_MISSING_PARENTHESES = YES;
@@ -320,7 +335,7 @@
 					/opt/local/include,
 					/usr/local/include,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				RUN_CLANG_STATIC_ANALYZER = YES;
 				SDKROOT = macosx;
 			};

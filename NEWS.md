@@ -1,3 +1,134 @@
+# Since 11.6.0 (beta)
+
+* macOS 10.11 support has been dropped.<br />
+  Karabiner-Elements works on macOS 10.12 (Sierra) or later.
+* The virtual keyboard compatibility has been improved.
+* `Keyboard type` in the virtual keyboard preferences has been removed. (Adverse effect of virtual keyboard improvement.)<br />
+  Please change the keyboard type from `System Preferences &gt; Keyboard &gt; Change Keyboard Type...`.
+  ![Keyboard Preferences](https://pqrs.org/osx/karabiner/img/news/v12.0.0_0.png)
+* `Caps Lock Delay` in the virtual keyboard preferences has been removed. (Adverse effect of virtual keyboard improvement.)
+* EventViewer has been improved showing the correct key name for PC keyboard keys and international keys.
+* Added `simultaneous_options.key_down_order`, `simultaneous_options.key_up_order` and `simultaneous_options.to_after_key_up`.
+* Fixed an issue that `to_if_alone`, `to_if_held_down` and `to_delayed_action` does not work properly with `simultaneous`.
+* Improved keyboard repeat handling with `simultaneous`.
+* Incompatible changes
+  * Changed `simultaneous` behaviour to post key_up events when any key is released.
+  * Changed `to_after_key_up` and `to_if_alone` behaviour as mandatory modifiers are removed from these events.
+
+
+# Version 11.6.0
+
+* Simultaneous key presses has been supported in complex modifications.
+  * Example: https://pqrs.org/osx/karabiner/json.html#typical-complex_modifications-examples-simultaneous-equal-delete-to-forward-delete
+  * Detail: https://pqrs.org/osx/karabiner/json.html#simultaneous
+* Improved Mouse key scroll wheel direction referring `System Preferences > Mouse > Scroll direction`.
+* Improved modifier flags handling around pointing button manipulations.
+* Mouse keys have been added into Simple Modifications.
+  ![mouse keys in Simple Modifications](https://pqrs.org/osx/karabiner/img/news/v11.6.0_0.png)
+* The eject key has been added into the from key of Simple Modifications.
+* The Vendor ID and Product ID of virtual devices has been changed. (0x0,0x0 -> 0x16c0,0x27db and 0x16c0,0x27da)
+
+
+# Version 11.5.0
+
+* `to_if_held_down` has been added.
+  * Examples:
+    * Open Alfred 3 if escape is held down.
+      * https://pqrs.org/osx/karabiner/json.html#typical-complex_modifications-examples-open-alfred-when-escape-is-held-down
+    * Quit application by holding command-q.
+      * https://pqrs.org/osx/karabiner/complex_modifications/#command_q
+* Avoided a VMware Remote Console issue that mouse pointer does not work properly on VMRC when Karabiner-Elements grabs the pointing device.
+* Improved a way to save karabiner.json.
+* Improved modifier flags handling in `to events`.
+* Fixed an issue that `to_if_alone` does not work properly when `to` is empty.
+
+
+# Version 11.4.0
+
+* Fixed an issue that the checkbox in `Preferences > Devices` is disabled for keyboards which do not have their own vendor id.
+* `mouse_key` has been added.
+  * Examples:
+    * Mouse keys (simple)
+      * src:  https://github.com/pqrs-org/KE-complex_modifications/blob/master/src/json/mouse_keys_simple.json.erb
+      * json: https://github.com/pqrs-org/KE-complex_modifications/blob/master/docs/json/mouse_keys_simple.json
+    * Mouse keys (full)
+      * src:  https://github.com/pqrs-org/KE-complex_modifications/blob/master/src/json/mouse_keys_full.json.erb
+      * json: https://github.com/pqrs-org/KE-complex_modifications/blob/master/docs/json/mouse_keys_full.json
+* `location_id` has been added to `device_if` and `device_unless`.
+
+
+# Version 11.3.0
+
+* Fixed an issue that Karabiner-11.2.0 does not work properly on some environments due to a possibility of macOS kernel extension cache problem.
+
+
+# Version 11.2.0
+
+* The caps lock LED manipulation has been disabled with non Apple keyboards until it is enabled manually.
+  ![has caps lock led](https://pqrs.org/osx/karabiner/img/news/v11.1.16_0.png)
+* Mouse button modifications has been added.<br />
+  Note:
+  * You have to enable your Mouse manually in Preferences &gt; Devices tab.
+  * Karabiner-Elements cannot modify Apple's pointing devices.
+* `to_delayed_action` has been added.
+  * Examples
+    * Quit application by pressing command-q twice
+      * src:  https://github.com/pqrs-org/KE-complex_modifications/blob/master/src/json/command_q.json.erb
+      * json: https://github.com/pqrs-org/KE-complex_modifications/blob/master/docs/json/command_q.json
+    * Emacs key bindings [C-x key strokes]
+      * src:  https://github.com/pqrs-org/KE-complex_modifications/blob/master/src/json/emacs_key_bindings.json.erb
+      * json: https://github.com/pqrs-org/KE-complex_modifications/blob/master/docs/json/emacs_key_bindings.json
+* `input_source_if` and `input_source_unless` has been added to `conditions`.
+  * Examples
+    * https://github.com/pqrs-org/KE-complex_modifications/blob/master/docs/json/example_input_source.json
+    * https://github.com/tekezo/Karabiner-Elements/blob/master/tests/src/manipulator_conditions/json/input_source.json
+* `select_input_source` has been added.
+  * Example
+    * https://github.com/pqrs-org/KE-complex_modifications/blob/master/docs/json/example_select_input_source.json
+* `keyboard_type_if` and `keyboard_type_unless` has been added to `conditions`.
+  * Example
+    * Change control-[ to escape
+      * src:  https://github.com/pqrs-org/KE-complex_modifications/blob/master/src/json/example_keyboard_type.json.erb
+      * json: https://github.com/pqrs-org/KE-complex_modifications/blob/master/docs/json/example_keyboard_type.json
+* The virtual keyboard handling has been improved.
+
+
+# Version 11.1.0
+
+* Fixed an issue that modifier flags becomes improperly state by mouse events.
+
+
+# Version 11.0.0
+
+* The first stable release of Karabiner-Elements.
+  (There is no changes from Karabiner-Elements 0.91.16.)
+
+
+# Version 0.91.16
+
+* Karabiner-Elements waits grabbing device until all modifier keys are released in order to avoid modifier flags stuck issue in mouse events.
+* Support consumer keys (e.g., media key events in Logitech keyboards.)
+
+
+# Version 0.91.13
+
+* Add per device support in `Simple Modifications` and `Fn Function Keys`.
+  ![Simple Modifications](https://pqrs.org/osx/karabiner/img/news/v0.91.13_0.png)
+* The modifier flag event handling has been improved.
+
+
+# Version 0.91.12
+
+* `device_if` and `device_unless` has been added to `conditions`.
+  * An example: https://github.com/pqrs-org/KE-complex_modifications/blob/master/docs/json/example_device.json
+
+
+# Version 0.91.11
+
+* Fixed an issue that modifier flags might become improperly state in complex_modifications.
+  (In complex_modifications rules which changes modifier+modifier to modifier.)
+
+
 # Version 0.91.10
 
 * macOS 10.13 (High Sierra) support has been improved.

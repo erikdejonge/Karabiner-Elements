@@ -5,16 +5,20 @@
 #include "apple_hid_usage_tables.hpp"
 #include "configuration_monitor.hpp"
 #include "constants.hpp"
+#include "device_detail.hpp"
 #include "event_tap_manager.hpp"
 #include "gcd_utility.hpp"
 #include "human_interface_device.hpp"
 #include "iokit_utility.hpp"
+#include "json_utility.hpp"
+#include "krbn_notification_center.hpp"
 #include "logger.hpp"
 #include "manipulator/details/post_event_to_virtual_devices.hpp"
 #include "manipulator/manipulator_managers_connector.hpp"
 #include "spdlog_utility.hpp"
-#include "system_preferences.hpp"
+#include "system_preferences_utility.hpp"
 #include "types.hpp"
+#include "virtual_hid_device_client.hpp"
 #include <IOKit/hid/IOHIDManager.h>
 #include <boost/algorithm/string.hpp>
 #include <fstream>
@@ -27,17 +31,31 @@ class device_grabber final {
 public:
   device_grabber(const device_grabber&) = delete;
 
-  device_grabber(virtual_hid_device_client& virtual_hid_device_client) : virtual_hid_device_client_(virtual_hid_device_client),
-                                                                         profile_(nlohmann::json()),
-                                                                         mode_(mode::observing),
-                                                                         suspended_(false) {
-    virtual_hid_device_client_disconnected_connection = virtual_hid_device_client_.client_disconnected.connect(
-        boost::bind(&device_grabber::virtual_hid_device_client_disconnected_callback, this));
+  device_grabber(void) : profile_(nlohmann::json()),
+                         merged_input_event_queue_(std::make_shared<event_queue>()),
+                         simple_modifications_applied_event_queue_(std::make_shared<event_queue>()),
+                         complex_modifications_applied_event_queue_(std::make_shared<event_queue>()),
+                         fn_function_keys_applied_event_queue_(std::make_shared<event_queue>()),
+                         posted_event_queue_(std::make_shared<event_queue>()),
+                         mode_(mode::observing),
+                         suspended_(false) {
+    client_connected_connection = virtual_hid_device_client_.client_connected.connect([&]() {
+      logger::get_logger().info("virtual_hid_device_client_ is connected");
 
-    post_event_to_virtual_devices_manipulator_ = std::make_shared<manipulator::details::post_event_to_virtual_devices>();
+      update_virtual_hid_keyboard();
+      update_virtual_hid_pointing();
+    });
+
+    client_disconnected_connection = virtual_hid_device_client_.client_disconnected.connect([&]() {
+      logger::get_logger().info("virtual_hid_device_client_ is disconnected");
+
+      stop_grabbing();
+    });
+
+    post_event_to_virtual_devices_manipulator_ = std::make_shared<manipulator::details::post_event_to_virtual_devices>(system_preferences_);
     post_event_to_virtual_devices_manipulator_manager_.push_back_manipulator(std::shared_ptr<manipulator::details::base>(post_event_to_virtual_devices_manipulator_));
 
-    complex_modifications_applied_event_queue_.enable_manipulator_environment_json_output(constants::get_manipulator_environment_json_file_path());
+    complex_modifications_applied_event_queue_->enable_manipulator_environment_json_output(constants::get_manipulator_environment_json_file_path());
 
     // Connect manipulator_managers
 
@@ -50,6 +68,17 @@ public:
                                                             fn_function_keys_applied_event_queue_);
     manipulator_managers_connector_.emplace_back_connection(post_event_to_virtual_devices_manipulator_manager_,
                                                             posted_event_queue_);
+
+    input_event_arrived_connection_ = krbn_notification_center::get_instance().input_event_arrived.connect([&]() {
+      manipulate(mach_absolute_time());
+    });
+
+    manipulator_timer_invoked_connection_ = manipulator::manipulator_timer::get_instance().timer_invoked.connect([&](auto timer_id, auto now) {
+      if (manipulator_timer_id_ == timer_id) {
+        manipulator_timer_id_ = boost::none;
+        manipulate(now);
+      }
+    });
 
     // macOS 10.12 sometimes synchronize caps lock LED to internal keyboard caps lock state.
     // The behavior causes LED state mismatch because device_grabber does not change the caps lock state of physical keyboards.
@@ -75,6 +104,7 @@ public:
     auto device_matching_dictionaries = iokit_utility::create_device_matching_dictionaries({
         std::make_pair(hid_usage_page::generic_desktop, hid_usage::gd_keyboard),
         std::make_pair(hid_usage_page::generic_desktop, hid_usage::gd_mouse),
+        std::make_pair(hid_usage_page::generic_desktop, hid_usage::gd_pointer),
     });
     if (device_matching_dictionaries) {
       IOHIDManagerSetDeviceMatchingMultiple(manager_, device_matching_dictionaries);
@@ -92,6 +122,9 @@ public:
     gcd_utility::dispatch_sync_in_main_queue(^{
       stop_grabbing();
 
+      input_event_arrived_connection_.disconnect();
+      manipulator_timer_invoked_connection_.disconnect();
+
       if (manager_) {
         IOHIDManagerUnscheduleFromRunLoop(manager_, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
         CFRelease(manager_);
@@ -100,7 +133,8 @@ public:
 
       led_monitor_timer_ = nullptr;
 
-      virtual_hid_device_client_disconnected_connection.disconnect();
+      client_connected_connection.disconnect();
+      client_disconnected_connection.disconnect();
     });
   }
 
@@ -108,11 +142,15 @@ public:
     gcd_utility::dispatch_sync_in_main_queue(^{
       mode_ = mode::grabbing;
 
-      virtual_hid_device_client_.terminate_virtual_hid_pointing();
-
       // We should call CGEventTapCreate after user is logged in.
       // So, we create event_tap_manager here.
-      event_tap_manager_ = std::make_unique<event_tap_manager>(std::bind(&device_grabber::caps_lock_state_changed_callback, this, std::placeholders::_1));
+      event_tap_manager_ = std::make_unique<event_tap_manager>(std::bind(&device_grabber::caps_lock_state_changed_callback,
+                                                                         this,
+                                                                         std::placeholders::_1),
+                                                               std::bind(&device_grabber::event_tap_pointing_device_event_callback,
+                                                                         this,
+                                                                         std::placeholders::_1,
+                                                                         std::placeholders::_2));
 
       configuration_monitor_ = std::make_unique<configuration_monitor>(user_core_configuration_file_path,
                                                                        [this](std::shared_ptr<core_configuration> core_configuration) {
@@ -122,6 +160,8 @@ public:
                                                                          set_profile(core_configuration_->get_selected_profile());
                                                                          grab_devices();
                                                                        });
+
+      virtual_hid_device_client_.connect();
     });
   }
 
@@ -133,9 +173,9 @@ public:
 
       mode_ = mode::observing;
 
-      virtual_hid_device_client_.terminate_virtual_hid_pointing();
-
       event_tap_manager_ = nullptr;
+
+      virtual_hid_device_client_.close();
     });
   }
 
@@ -199,11 +239,12 @@ public:
     });
   }
 
-  void set_system_preferences_values(const system_preferences::values& values) {
+  void set_system_preferences(const system_preferences& value) {
     gcd_utility::dispatch_sync_in_main_queue(^{
-      system_preferences_values_ = values;
+      system_preferences_ = value;
 
       update_fn_function_keys_manipulators();
+      post_keyboard_type_changed_event();
     });
   }
 
@@ -212,12 +253,46 @@ public:
     gcd_utility::dispatch_sync_in_main_queue(^{
       auto event = event_queue::queued_event::event::make_frontmost_application_changed_event(bundle_identifier,
                                                                                               file_path);
-      merged_input_event_queue_.emplace_back_event(device_id(0),
-                                                   mach_absolute_time(),
-                                                   event,
-                                                   event_type::key_down,
-                                                   event);
-      manipulate();
+      event_queue::queued_event queued_event(device_id(0),
+                                             event_queue::queued_event::event_time_stamp(mach_absolute_time()),
+                                             event,
+                                             event_type::single,
+                                             event);
+
+      merged_input_event_queue_->push_back_event(queued_event);
+
+      krbn_notification_center::get_instance().input_event_arrived();
+    });
+  }
+
+  void post_input_source_changed_event(const input_source_identifiers& input_source_identifiers) {
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      auto event = event_queue::queued_event::event::make_input_source_changed_event(input_source_identifiers);
+      event_queue::queued_event queued_event(device_id(0),
+                                             event_queue::queued_event::event_time_stamp(mach_absolute_time()),
+                                             event,
+                                             event_type::single,
+                                             event);
+
+      merged_input_event_queue_->push_back_event(queued_event);
+
+      krbn_notification_center::get_instance().input_event_arrived();
+    });
+  }
+
+  void post_keyboard_type_changed_event(void) {
+    gcd_utility::dispatch_sync_in_main_queue(^{
+      auto keyboard_type_string = system_preferences_utility::get_keyboard_type_string(system_preferences_.get_keyboard_type());
+      auto event = event_queue::queued_event::event::make_keyboard_type_changed_event(keyboard_type_string);
+      event_queue::queued_event queued_event(device_id(0),
+                                             event_queue::queued_event::event_time_stamp(mach_absolute_time()),
+                                             event,
+                                             event_type::single,
+                                             event);
+
+      merged_input_event_queue_->push_back_event(queued_event);
+
+      krbn_notification_center::get_instance().input_event_arrived();
     });
   }
 
@@ -226,10 +301,6 @@ private:
     observing,
     grabbing,
   };
-
-  void virtual_hid_device_client_disconnected_callback(void) {
-    stop_grabbing();
-  }
 
   static void static_device_matching_callback(void* _Nullable context, IOReturn result, void* _Nullable sender, IOHIDDeviceRef _Nonnull device) {
     if (result != kIOReturnSuccess) {
@@ -247,6 +318,22 @@ private:
   void device_matching_callback(IOHIDDeviceRef _Nonnull device) {
     if (!device) {
       return;
+    }
+
+    if (iokit_utility::is_karabiner_virtual_hid_device(device)) {
+      return;
+    }
+
+    // Skip if same device is already matched.
+    // (Multiple usage device (e.g. usage::pointer and usage::mouse) will be matched twice.)
+    if (auto registry_entry_id = iokit_utility::find_registry_entry_id(device)) {
+      for (const auto& h : hids_) {
+        if (auto e = h.second->find_registry_entry_id()) {
+          if (*registry_entry_id == *e) {
+            return;
+          }
+        }
+      }
     }
 
     iokit_utility::log_matching_device(device);
@@ -267,6 +354,7 @@ private:
     hids_[device] = std::move(dev);
 
     output_devices_json();
+    output_device_details_json();
 
     update_virtual_hid_pointing();
 
@@ -303,28 +391,49 @@ private:
         logger::get_logger().info("{0} is removed.", dev->get_name_for_log());
         dev->set_removed();
         dev->ungrab();
-        if (dev->is_pqrs_virtual_hid_keyboard()) {
-          ungrab_devices();
-        }
         hids_.erase(it);
       }
     }
 
     output_devices_json();
+    output_device_details_json();
+
+    // ----------------------------------------
+
+    if (iokit_utility::is_keyboard(device) &&
+        iokit_utility::is_karabiner_virtual_hid_device(device)) {
+      virtual_hid_device_client_.close();
+      ungrab_devices();
+
+      virtual_hid_device_client_.connect();
+      grab_devices();
+    }
 
     update_virtual_hid_pointing();
 
     // ----------------------------------------
+
     if (mode_ == mode::grabbing) {
       grab_devices();
     }
   }
 
-  void manipulate(void) {
-    manipulator_managers_connector_.manipulate();
+  void manipulate(uint64_t now) {
+    {
+      // Avoid recursive call
+      std::unique_lock<std::mutex> lock(manipulate_mutex_, std::try_to_lock);
 
-    posted_event_queue_.clear_events();
-    post_event_to_virtual_devices_manipulator_->post_events(virtual_hid_device_client_);
+      if (lock.owns_lock()) {
+        manipulator_managers_connector_.manipulate(now);
+
+        posted_event_queue_->clear_events();
+        post_event_to_virtual_devices_manipulator_->post_events(virtual_hid_device_client_);
+      }
+    }
+
+    if (auto min = manipulator_managers_connector_.min_input_event_time_stamp()) {
+      manipulator_timer_id_ = manipulator::manipulator_timer::get_instance().add_entry(*min);
+    }
   }
 
   void value_callback(human_interface_device& device,
@@ -334,41 +443,56 @@ private:
     } else {
       for (const auto& queued_event : event_queue.get_events()) {
         if (device.is_grabbed()) {
-          merged_input_event_queue_.push_back_event(queued_event);
+          event_queue::queued_event qe(queued_event.get_device_id(),
+                                       queued_event.get_event_time_stamp(),
+                                       queued_event.get_event(),
+                                       queued_event.get_event_type(),
+                                       queued_event.get_original_event());
+
+          merged_input_event_queue_->push_back_event(qe);
+
         } else {
           // device is ignored
           auto event = event_queue::queued_event::event::make_event_from_ignored_device_event();
-          merged_input_event_queue_.emplace_back_event(queued_event.get_device_id(),
-                                                       queued_event.get_time_stamp(),
-                                                       event,
-                                                       queued_event.get_event_type(),
-                                                       queued_event.get_event());
+          event_queue::queued_event qe(queued_event.get_device_id(),
+                                       queued_event.get_event_time_stamp(),
+                                       event,
+                                       queued_event.get_event_type(),
+                                       queued_event.get_event());
+
+          merged_input_event_queue_->push_back_event(qe);
         }
       }
     }
 
-    manipulate();
+    krbn_notification_center::get_instance().input_event_arrived();
     // manipulator_managers_connector_.log_events_sizes(logger::get_logger());
   }
 
   void post_device_ungrabbed_event(device_id device_id) {
     auto event = event_queue::queued_event::event::make_device_ungrabbed_event();
-    merged_input_event_queue_.emplace_back_event(device_id,
-                                                 mach_absolute_time(),
-                                                 event,
-                                                 event_type::key_down,
-                                                 event);
-    manipulate();
+    event_queue::queued_event queued_event(device_id,
+                                           event_queue::queued_event::event_time_stamp(mach_absolute_time()),
+                                           event,
+                                           event_type::single,
+                                           event);
+
+    merged_input_event_queue_->push_back_event(queued_event);
+
+    krbn_notification_center::get_instance().input_event_arrived();
   }
 
   void post_caps_lock_state_changed_callback(bool caps_lock_state) {
     event_queue::queued_event::event event(event_queue::queued_event::event::type::caps_lock_state_changed, caps_lock_state);
-    merged_input_event_queue_.emplace_back_event(device_id(0),
-                                                 mach_absolute_time(),
-                                                 event,
-                                                 event_type::key_down,
-                                                 event);
-    manipulate();
+    event_queue::queued_event queued_event(device_id(0),
+                                           event_queue::queued_event::event_time_stamp(mach_absolute_time()),
+                                           event,
+                                           event_type::single,
+                                           event);
+
+    merged_input_event_queue_->push_back_event(queued_event);
+
+    krbn_notification_center::get_instance().input_event_arrived();
   }
 
   human_interface_device::grabbable_state is_grabbable_callback(human_interface_device& device) {
@@ -397,20 +521,6 @@ private:
       return human_interface_device::grabbable_state::ungrabbable_temporarily;
     }
 
-    {
-      bool found = false;
-      for (const auto& it : hids_) {
-        if ((it.second)->is_pqrs_virtual_hid_keyboard()) {
-          found = true;
-        }
-      }
-      if (!found) {
-        std::string message = "virtual_hid_keyboard is not detected. Please wait for a while.";
-        is_grabbable_callback_log_reducer_.warn(message);
-        return human_interface_device::grabbable_state::ungrabbable_temporarily;
-      }
-    }
-
     // ----------------------------------------
 
     return human_interface_device::grabbable_state::grabbable;
@@ -425,10 +535,16 @@ private:
       }
       update_caps_lock_led(state);
     }
+
+    update_virtual_hid_pointing();
+
+    apple_notification_center::post_distributed_notification_to_all_sessions(constants::get_distributed_notification_device_grabbing_state_is_changed());
   }
 
   void ungrabbed_callback(human_interface_device& device) {
     post_device_ungrabbed_event(device.get_device_id());
+
+    apple_notification_center::post_distributed_notification_to_all_sessions(constants::get_distributed_notification_device_grabbing_state_is_changed());
   }
 
   void disabled_callback(human_interface_device& device) {
@@ -441,25 +557,98 @@ private:
     update_caps_lock_led(caps_lock_state);
   }
 
+  void event_tap_pointing_device_event_callback(CGEventType type, CGEventRef _Nullable event) {
+    boost::optional<event_type> pseudo_event_type;
+    boost::optional<event_queue::queued_event::event> pseudo_event;
+
+    switch (type) {
+      case kCGEventLeftMouseDown:
+        pseudo_event_type = event_type::key_down;
+        pseudo_event = event_queue::queued_event::event(pointing_button::button1);
+        break;
+
+      case kCGEventLeftMouseUp:
+        pseudo_event_type = event_type::key_up;
+        pseudo_event = event_queue::queued_event::event(pointing_button::button1);
+        break;
+
+      case kCGEventRightMouseDown:
+        pseudo_event_type = event_type::key_down;
+        pseudo_event = event_queue::queued_event::event(pointing_button::button2);
+        break;
+
+      case kCGEventRightMouseUp:
+        pseudo_event_type = event_type::key_up;
+        pseudo_event = event_queue::queued_event::event(pointing_button::button2);
+        break;
+
+      case kCGEventOtherMouseDown:
+        pseudo_event_type = event_type::key_down;
+        pseudo_event = event_queue::queued_event::event(pointing_button::button3);
+        break;
+
+      case kCGEventOtherMouseUp:
+        pseudo_event_type = event_type::key_up;
+        pseudo_event = event_queue::queued_event::event(pointing_button::button3);
+        break;
+
+      case kCGEventMouseMoved:
+      case kCGEventLeftMouseDragged:
+      case kCGEventRightMouseDragged:
+      case kCGEventOtherMouseDragged:
+        pseudo_event_type = event_type::single;
+        pseudo_event = event_queue::queued_event::event(pointing_motion());
+        break;
+
+      case kCGEventScrollWheel:
+        pseudo_event_type = event_type::single;
+        // Set non-zero value for `manipulator::details::base::unset_alone_if_needed`.
+        {
+          pointing_motion pointing_motion;
+          pointing_motion.set_vertical_wheel(1);
+          pseudo_event = event_queue::queued_event::event(pointing_motion);
+        }
+        break;
+
+      case kCGEventNull:
+      case kCGEventKeyDown:
+      case kCGEventKeyUp:
+      case kCGEventFlagsChanged:
+      case kCGEventTabletPointer:
+      case kCGEventTabletProximity:
+      case kCGEventTapDisabledByTimeout:
+      case kCGEventTapDisabledByUserInput:
+        break;
+    }
+
+    if (pseudo_event_type && pseudo_event) {
+      auto e = event_queue::queued_event::event::make_pointing_device_event_from_event_tap_event();
+      event_queue::queued_event queued_event(device_id(0),
+                                             event_queue::queued_event::event_time_stamp(mach_absolute_time()),
+                                             e,
+                                             *pseudo_event_type,
+                                             *pseudo_event);
+
+      merged_input_event_queue_->push_back_event(queued_event);
+
+      krbn_notification_center::get_instance().input_event_arrived();
+    }
+  }
+
   void update_caps_lock_led(bool caps_lock_state) {
-    // Update LED.
-    for (const auto& it : hids_) {
-      if ((it.second)->is_grabbed()) {
-        (it.second)->set_caps_lock_led_state(caps_lock_state ? led_state::on : led_state::off);
+    if (core_configuration_) {
+      for (const auto& it : hids_) {
+        auto& di = (it.second)->get_connected_device().get_identifiers();
+        bool manipulate_caps_lock_led = core_configuration_->get_selected_profile().get_device_manipulate_caps_lock_led(di);
+        if ((it.second)->is_grabbed() &&
+            manipulate_caps_lock_led) {
+          (it.second)->set_caps_lock_led_state(caps_lock_state ? led_state::on : led_state::off);
+        }
       }
     }
   }
 
-  bool is_keyboard_connected(void) {
-    for (const auto& it : hids_) {
-      if ((it.second)->is_keyboard()) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool is_pointing_device_grabbed(void) {
+  bool is_pointing_device_grabbed(void) const {
     for (const auto& it : hids_) {
       if ((it.second)->is_pointing_device() &&
           (it.second)->is_grabbed()) {
@@ -469,55 +658,50 @@ private:
     return false;
   }
 
+  void update_virtual_hid_keyboard(void) {
+    if (virtual_hid_device_client_.is_connected()) {
+      if (mode_ == mode::grabbing) {
+        pqrs::karabiner_virtual_hid_device::properties::keyboard_initialization properties;
+        properties.country_code = profile_.get_virtual_hid_keyboard().get_country_code();
+
+        virtual_hid_device_client_.initialize_virtual_hid_keyboard(properties);
+        return;
+      }
+
+      virtual_hid_device_client_.terminate_virtual_hid_keyboard();
+    }
+  }
+
   void update_virtual_hid_pointing(void) {
-    if (is_pointing_device_grabbed() ||
-        manipulator_managers_connector_.needs_virtual_hid_pointing()) {
-      virtual_hid_device_client_.initialize_virtual_hid_pointing();
-    } else {
+    if (virtual_hid_device_client_.is_connected()) {
+      if (mode_ == mode::grabbing) {
+        if (is_pointing_device_grabbed() ||
+            manipulator_managers_connector_.needs_virtual_hid_pointing()) {
+          virtual_hid_device_client_.initialize_virtual_hid_pointing();
+          return;
+        }
+      }
+
       virtual_hid_device_client_.terminate_virtual_hid_pointing();
     }
   }
 
-  boost::optional<const core_configuration::profile::device&> find_device_configuration(const human_interface_device& device) {
+  bool is_ignored_device(const human_interface_device& device) const {
     if (core_configuration_) {
-      for (const auto& d : core_configuration_->get_selected_profile().get_devices()) {
-        if (d.get_identifiers() == device.get_connected_device().get_identifiers()) {
-          return d;
-        }
-      }
-    }
-    return boost::none;
-  }
-
-  bool is_ignored_device(const human_interface_device& device) {
-    if (auto s = find_device_configuration(device)) {
-      return s->get_ignore();
-    }
-
-    if (device.is_pointing_device()) {
-      return true;
-    }
-
-    if (auto v = device.get_vendor_id()) {
-      if (auto p = device.get_product_id()) {
-        // Touch Bar on MacBook Pro 2016
-        if (*v == vendor_id(0x05ac) && *p == product_id(0x8600)) {
-          return true;
-        }
-      }
+      return core_configuration_->get_selected_profile().get_device_ignore(device.get_connected_device().get_identifiers());
     }
 
     return false;
   }
 
-  bool get_disable_built_in_keyboard_if_exists(const human_interface_device& device) {
-    if (auto s = find_device_configuration(device)) {
-      return s->get_disable_built_in_keyboard_if_exists();
+  bool get_disable_built_in_keyboard_if_exists(const human_interface_device& device) const {
+    if (core_configuration_) {
+      return core_configuration_->get_selected_profile().get_device_disable_built_in_keyboard_if_exists(device.get_connected_device().get_identifiers());
     }
     return false;
   }
 
-  bool need_to_disable_built_in_keyboard(void) {
+  bool need_to_disable_built_in_keyboard(void) const {
     for (const auto& it : hids_) {
       if (get_disable_built_in_keyboard_if_exists(*(it.second))) {
         return true;
@@ -536,16 +720,9 @@ private:
     }
   }
 
-  void output_devices_json(void) {
+  void output_devices_json(void) const {
     connected_devices connected_devices;
     for (const auto& it : hids_) {
-      if ((it.second)->is_pqrs_device()) {
-        continue;
-      }
-      if (!(it.second)->is_keyboard()) {
-        continue;
-      }
-
       connected_devices.push_back_device(it.second->get_connected_device());
     }
 
@@ -555,6 +732,24 @@ private:
     }
   }
 
+  void output_device_details_json(void) const {
+    // ----------------------------------------
+    std::vector<device_detail> device_details;
+    for (const auto& pair : hids_) {
+      device_details.push_back(pair.second->make_device_detail());
+    }
+
+    std::sort(std::begin(device_details),
+              std::end(device_details),
+              [&](auto& a, auto& b) {
+                return a.compare(b);
+              });
+
+    auto file_path = constants::get_device_details_json_file_path();
+    filesystem::create_directory_with_intermediate_directories(filesystem::dirname(file_path), 0755);
+    json_utility::save_to_file(nlohmann::json(device_details), file_path);
+  }
+
   void set_profile(const core_configuration::profile& profile) {
     profile_ = profile;
 
@@ -562,34 +757,57 @@ private:
     update_complex_modifications_manipulators();
     update_fn_function_keys_manipulators();
 
-    // Update virtual_hid_keyboard
-    {
-      pqrs::karabiner_virtual_hid_device::properties::keyboard_initialization properties;
-      if (auto k = types::get_keyboard_type(profile.get_virtual_hid_keyboard().get_keyboard_type())) {
-        properties.keyboard_type = *k;
-      }
-      properties.caps_lock_delay_milliseconds = pqrs::karabiner_virtual_hid_device::milliseconds(profile.get_virtual_hid_keyboard().get_caps_lock_delay_milliseconds());
-      virtual_hid_device_client_.initialize_virtual_hid_keyboard(properties);
-    }
-
+    update_virtual_hid_keyboard();
     update_virtual_hid_pointing();
   }
 
   void update_simple_modifications_manipulators(void) {
     simple_modifications_manipulator_manager_.invalidate_manipulators();
 
-    for (const auto& pair : profile_.get_simple_modifications_key_code_map()) {
-      auto manipulator = std::make_shared<manipulator::details::basic>(manipulator::details::from_event_definition(
-                                                                           pair.first,
-                                                                           {},
-                                                                           {
-                                                                               manipulator::details::event_definition::modifier::any,
-                                                                           }),
-                                                                       manipulator::details::to_event_definition(
-                                                                           pair.second,
-                                                                           {}));
-      simple_modifications_manipulator_manager_.push_back_manipulator(std::shared_ptr<manipulator::details::base>(manipulator));
+    for (const auto& device : profile_.get_devices()) {
+      for (const auto& pair : device.get_simple_modifications().get_pairs()) {
+        if (auto m = make_simple_modifications_manipulator(pair)) {
+          auto c = make_device_if_condition(device);
+          m->push_back_condition(c);
+          simple_modifications_manipulator_manager_.push_back_manipulator(m);
+        }
+      }
     }
+
+    for (const auto& pair : profile_.get_simple_modifications().get_pairs()) {
+      if (auto m = make_simple_modifications_manipulator(pair)) {
+        simple_modifications_manipulator_manager_.push_back_manipulator(m);
+      }
+    }
+  }
+
+  std::shared_ptr<manipulator::details::conditions::base> make_device_if_condition(const core_configuration::profile::device& device) const {
+    nlohmann::json json;
+    json["type"] = "device_if";
+    json["identifiers"] = nlohmann::json::array();
+    json["identifiers"].push_back(nlohmann::json::object());
+    json["identifiers"].back()["vendor_id"] = static_cast<int>(device.get_identifiers().get_vendor_id());
+    json["identifiers"].back()["product_id"] = static_cast<int>(device.get_identifiers().get_product_id());
+    json["identifiers"].back()["is_keyboard"] = device.get_identifiers().get_is_keyboard();
+    json["identifiers"].back()["is_pointing_device"] = device.get_identifiers().get_is_pointing_device();
+    return std::make_shared<manipulator::details::conditions::device>(json);
+  }
+
+  std::shared_ptr<manipulator::details::base> make_simple_modifications_manipulator(const std::pair<std::string, std::string>& pair) const {
+    if (!pair.first.empty() && !pair.second.empty()) {
+      try {
+        auto from_json = nlohmann::json::parse(pair.first);
+        from_json["modifiers"]["optional"] = nlohmann::json::array();
+        from_json["modifiers"]["optional"].push_back("any");
+
+        auto to_json = nlohmann::json::parse(pair.second);
+
+        return std::make_shared<manipulator::details::basic>(manipulator::details::basic::from_event_definition(from_json),
+                                                             manipulator::details::to_event_definition(to_json));
+      } catch (std::exception&) {
+      }
+    }
+    return nullptr;
   }
 
   void update_complex_modifications_manipulators(void) {
@@ -609,18 +827,19 @@ private:
   void update_fn_function_keys_manipulators(void) {
     fn_function_keys_manipulator_manager_.invalidate_manipulators();
 
-    std::unordered_set<manipulator::details::event_definition::modifier> from_mandatory_modifiers;
-    std::unordered_set<manipulator::details::event_definition::modifier> from_optional_modifiers({
-        manipulator::details::event_definition::modifier::any,
-    });
-    std::unordered_set<manipulator::details::event_definition::modifier> to_modifiers;
+    auto from_mandatory_modifiers = nlohmann::json::array();
 
-    if (system_preferences_values_.get_keyboard_fn_state()) {
+    auto from_optional_modifiers = nlohmann::json::array();
+    from_optional_modifiers.push_back("any");
+
+    auto to_modifiers = nlohmann::json::array();
+
+    if (system_preferences_.get_keyboard_fn_state()) {
       // f1 -> f1
       // fn+f1 -> display_brightness_decrement
 
-      from_mandatory_modifiers.insert(manipulator::details::event_definition::modifier::fn);
-      to_modifiers.insert(manipulator::details::event_definition::modifier::fn);
+      from_mandatory_modifiers.push_back("fn");
+      to_modifiers.push_back("fn");
 
     } else {
       // f1 -> display_brightness_decrement
@@ -628,81 +847,127 @@ private:
 
       // fn+f1 ... fn+f12 -> f1 .. f12
 
-      for (const auto& key_code : std::vector<key_code>({
-               key_code::f1,
-               key_code::f2,
-               key_code::f3,
-               key_code::f4,
-               key_code::f5,
-               key_code::f6,
-               key_code::f7,
-               key_code::f8,
-               key_code::f9,
-               key_code::f10,
-               key_code::f11,
-               key_code::f12,
-           })) {
-        auto manipulator = std::make_shared<manipulator::details::basic>(manipulator::details::from_event_definition(
-                                                                             key_code,
-                                                                             {
-                                                                                 manipulator::details::event_definition::modifier::fn,
-                                                                             },
-                                                                             {
-                                                                                 manipulator::details::event_definition::modifier::any,
-                                                                             }),
-                                                                         manipulator::details::to_event_definition(
-                                                                             key_code,
-                                                                             {
-                                                                                 manipulator::details::event_definition::modifier::fn,
-                                                                             }));
+      for (int i = 1; i <= 12; ++i) {
+        auto from_json = nlohmann::json::object({
+            {"key_code", fmt::format("f{0}", i)},
+            {"modifiers", nlohmann::json::object({
+                              {"mandatory", nlohmann::json::array({"fn"})},
+                              {"optional", nlohmann::json::array({"any"})},
+                          })},
+        });
+
+        auto to_json = nlohmann::json::object({
+            {"key_code", fmt::format("f{0}", i)},
+            {"modifiers", nlohmann::json::array({"fn"})},
+        });
+
+        auto manipulator = std::make_shared<manipulator::details::basic>(manipulator::details::basic::from_event_definition(from_json),
+                                                                         manipulator::details::to_event_definition(to_json));
         fn_function_keys_manipulator_manager_.push_back_manipulator(std::shared_ptr<manipulator::details::base>(manipulator));
       }
     }
 
     // from_modifiers+f1 -> display_brightness_decrement ...
 
-    for (const auto& pair : profile_.get_fn_function_keys_key_code_map()) {
-      auto manipulator = std::make_shared<manipulator::details::basic>(manipulator::details::from_event_definition(
-                                                                           pair.first,
-                                                                           from_mandatory_modifiers,
-                                                                           from_optional_modifiers),
-                                                                       manipulator::details::to_event_definition(
-                                                                           pair.second,
-                                                                           to_modifiers));
-      fn_function_keys_manipulator_manager_.push_back_manipulator(std::shared_ptr<manipulator::details::base>(manipulator));
+    for (const auto& device : profile_.get_devices()) {
+      for (const auto& pair : device.get_fn_function_keys().get_pairs()) {
+        if (auto m = make_fn_function_keys_manipulator(pair,
+                                                       from_mandatory_modifiers,
+                                                       from_optional_modifiers,
+                                                       to_modifiers)) {
+          auto c = make_device_if_condition(device);
+          m->push_back_condition(c);
+          fn_function_keys_manipulator_manager_.push_back_manipulator(m);
+        }
+      }
+    }
+
+    for (const auto& pair : profile_.get_fn_function_keys().get_pairs()) {
+      if (auto m = make_fn_function_keys_manipulator(pair,
+                                                     from_mandatory_modifiers,
+                                                     from_optional_modifiers,
+                                                     to_modifiers)) {
+        fn_function_keys_manipulator_manager_.push_back_manipulator(m);
+      }
     }
 
     // fn+return_or_enter -> keypad_enter ...
+    {
+      nlohmann::json data = nlohmann::json::array();
 
-    auto pairs = std::vector<std::pair<key_code, key_code>>({
-        std::make_pair(key_code::return_or_enter, key_code::keypad_enter),
-        std::make_pair(key_code::delete_or_backspace, key_code::delete_forward),
-        std::make_pair(key_code::right_arrow, key_code::end),
-        std::make_pair(key_code::left_arrow, key_code::home),
-        std::make_pair(key_code::down_arrow, key_code::page_down),
-        std::make_pair(key_code::up_arrow, key_code::page_up),
-    });
-    for (const auto& p : pairs) {
-      auto manipulator = std::make_shared<manipulator::details::basic>(manipulator::details::from_event_definition(
-                                                                           p.first,
-                                                                           {
-                                                                               manipulator::details::event_definition::modifier::fn,
-                                                                           },
-                                                                           {
-                                                                               manipulator::details::event_definition::modifier::any,
-                                                                           }),
-                                                                       manipulator::details::to_event_definition(
-                                                                           p.second,
-                                                                           {
-                                                                               manipulator::details::event_definition::modifier::fn,
-                                                                           }));
-      fn_function_keys_manipulator_manager_.push_back_manipulator(std::shared_ptr<manipulator::details::base>(manipulator));
+      data.push_back(nlohmann::json::object({
+          {"from", nlohmann::json::object({{"key_code", "return_or_enter"}})},
+          {"to", nlohmann::json::object({{"key_code", "keypad_enter"}})},
+      }));
+
+      data.push_back(nlohmann::json::object({
+          {"from", nlohmann::json::object({{"key_code", "delete_or_backspace"}})},
+          {"to", nlohmann::json::object({{"key_code", "delete_forward"}})},
+      }));
+
+      data.push_back(nlohmann::json::object({
+          {"from", nlohmann::json::object({{"key_code", "right_arrow"}})},
+          {"to", nlohmann::json::object({{"key_code", "end"}})},
+      }));
+
+      data.push_back(nlohmann::json::object({
+          {"from", nlohmann::json::object({{"key_code", "left_arrow"}})},
+          {"to", nlohmann::json::object({{"key_code", "home"}})},
+      }));
+
+      data.push_back(nlohmann::json::object({
+          {"from", nlohmann::json::object({{"key_code", "down_arrow"}})},
+          {"to", nlohmann::json::object({{"key_code", "page_down"}})},
+      }));
+
+      data.push_back(nlohmann::json::object({
+          {"from", nlohmann::json::object({{"key_code", "up_arrow"}})},
+          {"to", nlohmann::json::object({{"key_code", "page_up"}})},
+      }));
+
+      for (const auto& d : data) {
+        auto from_json = d["from"];
+        from_json["modifiers"]["mandatory"] = nlohmann::json::array({"fn"});
+        from_json["modifiers"]["optional"] = nlohmann::json::array({"any"});
+
+        auto to_json = d["to"];
+        to_json["modifiers"] = nlohmann::json::array({"fn"});
+
+        auto manipulator = std::make_shared<manipulator::details::basic>(manipulator::details::basic::from_event_definition(from_json),
+                                                                         manipulator::details::to_event_definition(to_json));
+        fn_function_keys_manipulator_manager_.push_back_manipulator(std::shared_ptr<manipulator::details::base>(manipulator));
+      }
     }
   }
 
-  virtual_hid_device_client& virtual_hid_device_client_;
+  std::shared_ptr<manipulator::details::base> make_fn_function_keys_manipulator(const std::pair<std::string, std::string>& pair,
+                                                                                const nlohmann::json& from_mandatory_modifiers,
+                                                                                const nlohmann::json& from_optional_modifiers,
+                                                                                const nlohmann::json& to_modifiers) {
+    try {
+      auto from_json = nlohmann::json::parse(pair.first);
+      if (from_json.empty()) {
+        return nullptr;
+      }
+      from_json["modifiers"]["mandatory"] = from_mandatory_modifiers;
+      from_json["modifiers"]["optional"] = from_optional_modifiers;
 
-  boost::signals2::connection virtual_hid_device_client_disconnected_connection;
+      auto to_json = nlohmann::json::parse(pair.second);
+      if (to_json.empty()) {
+        return nullptr;
+      }
+      to_json["modifiers"] = to_modifiers;
+
+      return std::make_shared<manipulator::details::basic>(manipulator::details::basic::from_event_definition(from_json),
+                                                           manipulator::details::to_event_definition(to_json));
+    } catch (std::exception&) {
+    }
+    return nullptr;
+  }
+
+  virtual_hid_device_client virtual_hid_device_client_;
+  boost::signals2::connection client_connected_connection;
+  boost::signals2::connection client_disconnected_connection;
 
   std::unique_ptr<configuration_monitor> configuration_monitor_;
   std::shared_ptr<core_configuration> core_configuration_;
@@ -713,24 +978,29 @@ private:
   std::unordered_map<IOHIDDeviceRef, std::unique_ptr<human_interface_device>> hids_;
 
   core_configuration::profile profile_;
-  system_preferences::values system_preferences_values_;
+  system_preferences system_preferences_;
 
   manipulator::manipulator_managers_connector manipulator_managers_connector_;
+  boost::signals2::connection input_event_arrived_connection_;
+  boost::signals2::connection manipulator_timer_invoked_connection_;
 
-  event_queue merged_input_event_queue_;
+  std::mutex manipulate_mutex_;
+  boost::optional<manipulator::manipulator_timer::timer_id> manipulator_timer_id_;
+
+  std::shared_ptr<event_queue> merged_input_event_queue_;
 
   manipulator::manipulator_manager simple_modifications_manipulator_manager_;
-  event_queue simple_modifications_applied_event_queue_;
+  std::shared_ptr<event_queue> simple_modifications_applied_event_queue_;
 
   manipulator::manipulator_manager complex_modifications_manipulator_manager_;
-  event_queue complex_modifications_applied_event_queue_;
+  std::shared_ptr<event_queue> complex_modifications_applied_event_queue_;
 
   manipulator::manipulator_manager fn_function_keys_manipulator_manager_;
-  event_queue fn_function_keys_applied_event_queue_;
+  std::shared_ptr<event_queue> fn_function_keys_applied_event_queue_;
 
   std::shared_ptr<manipulator::details::post_event_to_virtual_devices> post_event_to_virtual_devices_manipulator_;
   manipulator::manipulator_manager post_event_to_virtual_devices_manipulator_manager_;
-  event_queue posted_event_queue_;
+  std::shared_ptr<event_queue> posted_event_queue_;
 
   std::unique_ptr<gcd_utility::main_queue_timer> led_monitor_timer_;
 

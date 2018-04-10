@@ -2,6 +2,7 @@
 
 #include "console_user_server_client.hpp"
 #include "constants.hpp"
+#include "input_source_manager.hpp"
 #include "local_datagram_server.hpp"
 #include "shell_utility.hpp"
 #include "types.hpp"
@@ -12,7 +13,8 @@ class receiver final {
 public:
   receiver(const receiver&) = delete;
 
-  receiver(void) : exit_loop_(false) {
+  receiver(void) : exit_loop_(false),
+                   last_select_input_source_time_stamp_(0) {
     const size_t buffer_length = 32 * 1024;
     buffer_.resize(buffer_length);
 
@@ -71,6 +73,46 @@ private:
             }
             break;
 
+          case operation_type::select_input_source:
+            if (n != sizeof(operation_type_select_input_source_struct)) {
+              logger::get_logger().error("invalid size for operation_type::select_input_source");
+            } else {
+              auto p = reinterpret_cast<operation_type_select_input_source_struct*>(&(buffer_[0]));
+
+              // Ensure input_source_selector's strings are null-terminated string even if corrupted data is sent.
+              p->language[sizeof(p->language) - 1] = '\0';
+              p->input_source_id[sizeof(p->input_source_id) - 1] = '\0';
+              p->input_mode_id[sizeof(p->input_mode_id) - 1] = '\0';
+
+              uint64_t time_stamp = p->time_stamp;
+              boost::optional<std::string> language(std::string(p->language));
+              boost::optional<std::string> input_source_id(std::string(p->input_source_id));
+              boost::optional<std::string> input_mode_id(std::string(p->input_mode_id));
+              if (language && language->empty()) {
+                language = boost::none;
+              }
+              if (input_source_id && input_source_id->empty()) {
+                input_source_id = boost::none;
+              }
+              if (input_mode_id && input_mode_id->empty()) {
+                input_mode_id = boost::none;
+              }
+
+              input_source_selector input_source_selector(language,
+                                                          input_source_id,
+                                                          input_mode_id);
+
+              dispatch_async(dispatch_get_main_queue(), ^{
+                if (last_select_input_source_time_stamp_ == time_stamp) {
+                  return;
+                }
+                if (input_source_manager_.select(input_source_selector)) {
+                  last_select_input_source_time_stamp_ = time_stamp;
+                }
+              });
+            }
+            break;
+
           default:
             break;
         }
@@ -83,5 +125,8 @@ private:
   std::unique_ptr<local_datagram_server> server_;
   std::thread thread_;
   std::atomic<bool> exit_loop_;
+
+  input_source_manager input_source_manager_;
+  uint64_t last_select_input_source_time_stamp_;
 };
 } // namespace krbn

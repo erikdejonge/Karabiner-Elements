@@ -1,7 +1,6 @@
 #pragma once
 
 #include "manipulator/details/conditions/base.hpp"
-#include <regex>
 #include <string>
 #include <vector>
 
@@ -55,7 +54,8 @@ public:
   virtual ~variable(void) {
   }
 
-  virtual bool is_fulfilled(const manipulator_environment& manipulator_environment) const {
+  virtual bool is_fulfilled(const event_queue::queued_event& queued_event,
+                            const manipulator_environment& manipulator_environment) const {
     switch (type_) {
       case type::variable_if:
         return manipulator_environment.get_variable(name_) == value_;

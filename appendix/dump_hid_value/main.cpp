@@ -104,10 +104,22 @@ private:
                       krbn::event_queue& event_queue) {
     for (const auto& queued_event : event_queue.get_events()) {
       switch (queued_event.get_event().get_type()) {
+        case krbn::event_queue::queued_event::event::type::none:
+          std::cout << "none" << std::endl;
+          break;
+
         case krbn::event_queue::queued_event::event::type::key_code:
           if (auto key_code = queued_event.get_event().get_key_code()) {
             std::cout << "Key: " << std::dec << static_cast<uint32_t>(*key_code) << " "
-                      << (queued_event.get_event_type() == krbn::event_type::key_down ? "(down)" : "(up)")
+                      << queued_event.get_event_type()
+                      << std::endl;
+          }
+          break;
+
+        case krbn::event_queue::queued_event::event::type::consumer_key_code:
+          if (auto consumer_key_code = queued_event.get_event().get_consumer_key_code()) {
+            std::cout << "ConsumerKey: " << std::dec << static_cast<uint32_t>(*consumer_key_code) << " "
+                      << queued_event.get_event_type()
                       << std::endl;
           }
           break;
@@ -115,34 +127,14 @@ private:
         case krbn::event_queue::queued_event::event::type::pointing_button:
           if (auto pointing_button = queued_event.get_event().get_pointing_button()) {
             std::cout << "Button: " << std::dec << static_cast<uint32_t>(*pointing_button) << " "
-                      << (queued_event.get_event_type() == krbn::event_type::key_down ? "(down)" : "(up)")
+                      << queued_event.get_event_type()
                       << std::endl;
           }
           break;
 
-        case krbn::event_queue::queued_event::event::type::pointing_x:
-        case krbn::event_queue::queued_event::event::type::pointing_y:
-        case krbn::event_queue::queued_event::event::type::pointing_vertical_wheel:
-        case krbn::event_queue::queued_event::event::type::pointing_horizontal_wheel:
-          if (auto integer_value = queued_event.get_event().get_integer_value()) {
-            switch (queued_event.get_event().get_type()) {
-              case krbn::event_queue::queued_event::event::type::pointing_x:
-                std::cout << "Pointing X: ";
-                break;
-              case krbn::event_queue::queued_event::event::type::pointing_y:
-                std::cout << "Pointing Y: ";
-                break;
-              case krbn::event_queue::queued_event::event::type::pointing_vertical_wheel:
-                std::cout << "Vertical Wheel: ";
-                break;
-              case krbn::event_queue::queued_event::event::type::pointing_horizontal_wheel:
-                std::cout << "Horizontal Wheel: ";
-                break;
-              default:
-                break;
-            }
-
-            std::cout << std::dec << *integer_value << std::endl;
+        case krbn::event_queue::queued_event::event::type::pointing_motion:
+          if (auto pointing_motion = queued_event.get_event().get_pointing_motion()) {
+            std::cout << "pointing_motion: " << pointing_motion->to_json() << std::endl;
           }
           break;
 
@@ -150,12 +142,24 @@ private:
           std::cout << "shell_command" << std::endl;
           break;
 
-        case krbn::event_queue::queued_event::event::type::device_keys_are_released:
-          std::cout << "device_keys_are_released for " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
+        case krbn::event_queue::queued_event::event::type::select_input_source:
+          std::cout << "select_input_source" << std::endl;
           break;
 
-        case krbn::event_queue::queued_event::event::type::device_pointing_buttons_are_released:
-          std::cout << "device_pointing_buttons_are_released for " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
+        case krbn::event_queue::queued_event::event::type::set_variable:
+          std::cout << "set_variable" << std::endl;
+          break;
+
+        case krbn::event_queue::queued_event::event::type::mouse_key:
+          std::cout << "mouse_key" << std::endl;
+          break;
+
+        case krbn::event_queue::queued_event::event::type::stop_keyboard_repeat:
+          std::cout << "stop_keyboard_repeat" << std::endl;
+          break;
+
+        case krbn::event_queue::queued_event::event::type::device_keys_and_pointing_buttons_are_released:
+          std::cout << "device_keys_and_pointing_buttons_are_released for " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
           break;
 
         case krbn::event_queue::queued_event::event::type::device_ungrabbed:
@@ -172,14 +176,28 @@ private:
           std::cout << "event_from_ignored_device from " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
           break;
 
-        case krbn::event_queue::queued_event::event::type::frontmost_application_changed:
-          std::cout << "frontmost_application_changed "
-                    << queued_event.get_event().get_frontmost_application_bundle_identifier() << " "
-                    << queued_event.get_event().get_frontmost_application_file_path() << std::endl;
+        case krbn::event_queue::queued_event::event::type::pointing_device_event_from_event_tap:
+          std::cout << "pointing_device_event_from_event_tap from " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
           break;
 
-        case krbn::event_queue::queued_event::event::type::set_variable:
-          std::cout << "set_variable" << std::endl;
+        case krbn::event_queue::queued_event::event::type::frontmost_application_changed:
+          if (auto frontmost_application = queued_event.get_event().get_frontmost_application()) {
+            std::cout << "frontmost_application_changed "
+                      << frontmost_application->get_bundle_identifier() << " "
+                      << frontmost_application->get_file_path() << std::endl;
+          }
+          break;
+
+        case krbn::event_queue::queued_event::event::type::input_source_changed:
+          if (auto input_source_identifiers = queued_event.get_event().get_input_source_identifiers()) {
+            std::cout << "input_source_changed " << input_source_identifiers << std::endl;
+          }
+          break;
+
+        case krbn::event_queue::queued_event::event::type::keyboard_type_changed:
+          if (auto keyboard_type = queued_event.get_event().get_keyboard_type()) {
+            std::cout << "keyboard_type_changed " << keyboard_type << std::endl;
+          }
           break;
       }
     }

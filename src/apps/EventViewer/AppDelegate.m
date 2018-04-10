@@ -1,17 +1,21 @@
 @import Carbon;
 #import "AppDelegate.h"
+#import "DevicesController.h"
+#import "EventQueue.h"
 #import "FrontmostApplicationController.h"
-#import "VariablesController.h"
 #import "KeyResponder.h"
 #import "PreferencesKeys.h"
+#import "VariablesController.h"
 #import "weakify.h"
 
 @interface AppDelegate ()
 
 @property(weak) IBOutlet NSWindow* window;
+@property(weak) IBOutlet EventQueue* eventQueue;
 @property(weak) IBOutlet KeyResponder* keyResponder;
 @property(weak) IBOutlet FrontmostApplicationController* frontmostApplicationController;
 @property(weak) IBOutlet VariablesController* variablesController;
+@property(weak) IBOutlet DevicesController* devicesController;
 
 @end
 
@@ -20,8 +24,25 @@
 - (void)applicationDidFinishLaunching:(NSNotification*)aNotification {
   [self setKeyResponder];
   [self setWindowProperty:self];
+  [self.eventQueue setup];
   [self.frontmostApplicationController setup];
   [self.variablesController setup];
+  [self.devicesController setup];
+
+  @weakify(self);
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+    @strongify(self);
+    if (self.eventQueue.observedDeviceCount == 0) {
+      NSAlert* alert = [NSAlert new];
+      alert.messageText = @"Warning";
+      alert.informativeText = @"EventViewer failed to observe keyboard devices.\n"
+                              @"If you are using another keyboard customizer, stop it temporarily before run EventViewer.";
+      [alert addButtonWithTitle:@"OK"];
+
+      [alert beginSheetModalForWindow:self.window
+                    completionHandler:^(NSModalResponse returnCode){}];
+    }
+  });
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)theApplication {

@@ -1,4 +1,5 @@
 #import "CoreConfigurationModel.h"
+#import "KarabinerKit/KarabinerKit.h"
 
 @interface KarabinerKitCoreConfigurationModel ()
 
@@ -95,60 +96,114 @@
   libkrbn_core_configuration_erase_profile(self.libkrbnCoreConfiguration, index);
 }
 
-- (NSUInteger)selectedProfileSimpleModificationsCount {
-  return libkrbn_core_configuration_get_selected_profile_simple_modifications_size(self.libkrbnCoreConfiguration);
-}
-
-- (NSString*)selectedProfileSimpleModificationFirstAtIndex:(NSUInteger)index {
-  const char* p = libkrbn_core_configuration_get_selected_profile_simple_modification_first(self.libkrbnCoreConfiguration, index);
-  if (p) {
-    return [NSString stringWithUTF8String:p];
+- (libkrbn_device_identifiers*)deviceIdentifiersByIndex:(NSInteger)connectedDeviceIndex
+                                      deviceIdentifiers:(libkrbn_device_identifiers*)deviceIdentifiers {
+  if (deviceIdentifiers) {
+    KarabinerKitConnectedDevices* connectedDevices = [KarabinerKitDeviceManager sharedManager].connectedDevices;
+    if (0 <= connectedDeviceIndex && connectedDeviceIndex < (NSInteger)(connectedDevices.devicesCount)) {
+      *deviceIdentifiers = [connectedDevices deviceIdentifiersAtIndex:connectedDeviceIndex];
+      return deviceIdentifiers;
+    }
   }
-  return @"";
+  return nil;
 }
 
-- (NSString*)selectedProfileSimpleModificationSecondAtIndex:(NSUInteger)index {
-  const char* p = libkrbn_core_configuration_get_selected_profile_simple_modification_second(self.libkrbnCoreConfiguration, index);
-  if (p) {
-    return [NSString stringWithUTF8String:p];
-  }
-  return @"";
+- (NSUInteger)selectedProfileSimpleModificationsCount:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  return libkrbn_core_configuration_get_selected_profile_simple_modifications_size(self.libkrbnCoreConfiguration,
+                                                                                   [self deviceIdentifiersByIndex:connectedDeviceIndex
+                                                                                                deviceIdentifiers:&deviceIdentifiers]);
 }
 
-- (void)setSelectedProfileSimpleModificationAtIndex:(NSUInteger)index from:(NSString*)from to:(NSString*)to {
-  libkrbn_core_configuration_replace_selected_profile_simple_modification(self.libkrbnCoreConfiguration, index, [from UTF8String], [to UTF8String]);
+- (NSString*)selectedProfileSimpleModificationFromJsonStringAtIndex:(NSUInteger)index
+                                               connectedDeviceIndex:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  const char* p = libkrbn_core_configuration_get_selected_profile_simple_modification_from_json_string(
+      self.libkrbnCoreConfiguration,
+      index,
+      [self deviceIdentifiersByIndex:connectedDeviceIndex
+                   deviceIdentifiers:&deviceIdentifiers]);
+  return p ? [NSString stringWithUTF8String:p] : @"";
 }
 
-- (void)addSimpleModificationToSelectedProfile {
-  libkrbn_core_configuration_push_back_selected_profile_simple_modification(self.libkrbnCoreConfiguration);
+- (NSString*)selectedProfileSimpleModificationToJsonStringAtIndex:(NSUInteger)index
+                                             connectedDeviceIndex:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  const char* p = libkrbn_core_configuration_get_selected_profile_simple_modification_to_json_string(
+      self.libkrbnCoreConfiguration,
+      index,
+      [self deviceIdentifiersByIndex:connectedDeviceIndex
+                   deviceIdentifiers:&deviceIdentifiers]);
+  return p ? [NSString stringWithUTF8String:p] : @"";
 }
 
-- (void)removeSelectedProfileSimpleModificationAtIndex:(NSUInteger)index {
-  libkrbn_core_configuration_erase_selected_profile_simple_modification(self.libkrbnCoreConfiguration, index);
+- (void)setSelectedProfileSimpleModificationAtIndex:(NSUInteger)index
+                                               from:(NSString*)fromJsonString
+                                                 to:(NSString*)toJsonString
+                               connectedDeviceIndex:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+
+  libkrbn_core_configuration_replace_selected_profile_simple_modification(self.libkrbnCoreConfiguration,
+                                                                          index,
+                                                                          fromJsonString.UTF8String,
+                                                                          toJsonString.UTF8String,
+                                                                          [self deviceIdentifiersByIndex:connectedDeviceIndex
+                                                                                       deviceIdentifiers:&deviceIdentifiers]);
 }
 
-- (NSUInteger)selectedProfileFnFunctionKeysCount {
-  return libkrbn_core_configuration_get_selected_profile_fn_function_keys_size(self.libkrbnCoreConfiguration);
+- (void)addSimpleModificationToSelectedProfile:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  libkrbn_core_configuration_push_back_selected_profile_simple_modification(self.libkrbnCoreConfiguration,
+                                                                            [self deviceIdentifiersByIndex:connectedDeviceIndex
+                                                                                         deviceIdentifiers:&deviceIdentifiers]);
 }
 
-- (NSString*)selectedProfileFnFunctionKeyFirstAtIndex:(NSUInteger)index {
-  const char* p = libkrbn_core_configuration_get_selected_profile_fn_function_key_first(self.libkrbnCoreConfiguration, index);
-  if (p) {
-    return [NSString stringWithUTF8String:p];
-  }
-  return @"";
+- (void)removeSelectedProfileSimpleModificationAtIndex:(NSUInteger)index connectedDeviceIndex:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  libkrbn_core_configuration_erase_selected_profile_simple_modification(self.libkrbnCoreConfiguration,
+                                                                        index,
+                                                                        [self deviceIdentifiersByIndex:connectedDeviceIndex
+                                                                                     deviceIdentifiers:&deviceIdentifiers]);
 }
 
-- (NSString*)selectedProfileFnFunctionKeySecondAtIndex:(NSUInteger)index {
-  const char* p = libkrbn_core_configuration_get_selected_profile_fn_function_key_second(self.libkrbnCoreConfiguration, index);
-  if (p) {
-    return [NSString stringWithUTF8String:p];
-  }
-  return @"";
+- (NSUInteger)selectedProfileFnFunctionKeysCount:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  return libkrbn_core_configuration_get_selected_profile_fn_function_keys_size(self.libkrbnCoreConfiguration,
+                                                                               [self deviceIdentifiersByIndex:connectedDeviceIndex
+                                                                                            deviceIdentifiers:&deviceIdentifiers]);
 }
 
-- (void)setSelectedProfileFnFunctionKey:(NSString*)from to:(NSString*)to {
-  libkrbn_core_configuration_replace_selected_profile_fn_function_key(self.libkrbnCoreConfiguration, [from UTF8String], [to UTF8String]);
+- (NSString*)selectedProfileFnFunctionKeyFromJsonStringAtIndex:(NSUInteger)index
+                                          connectedDeviceIndex:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  const char* p = libkrbn_core_configuration_get_selected_profile_fn_function_key_from_json_string(
+      self.libkrbnCoreConfiguration,
+      index,
+      [self deviceIdentifiersByIndex:connectedDeviceIndex
+                   deviceIdentifiers:&deviceIdentifiers]);
+  return p ? [NSString stringWithUTF8String:p] : @"";
+}
+
+- (NSString*)selectedProfileFnFunctionKeyToJsonStringAtIndex:(NSUInteger)index
+                                        connectedDeviceIndex:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  const char* p = libkrbn_core_configuration_get_selected_profile_fn_function_key_to_json_string(
+      self.libkrbnCoreConfiguration,
+      index,
+      [self deviceIdentifiersByIndex:connectedDeviceIndex
+                   deviceIdentifiers:&deviceIdentifiers]);
+  return p ? [NSString stringWithUTF8String:p] : @"";
+}
+
+- (void)setSelectedProfileFnFunctionKey:(NSString*)from
+                                     to:(NSString*)to
+                   connectedDeviceIndex:(NSInteger)connectedDeviceIndex {
+  libkrbn_device_identifiers deviceIdentifiers;
+  libkrbn_core_configuration_replace_selected_profile_fn_function_key(self.libkrbnCoreConfiguration,
+                                                                      from.UTF8String,
+                                                                      to.UTF8String,
+                                                                      [self deviceIdentifiersByIndex:connectedDeviceIndex
+                                                                                   deviceIdentifiers:&deviceIdentifiers]);
 }
 
 - (NSUInteger)selectedProfileComplexModificationsRulesCount {
@@ -179,72 +234,48 @@
   libkrbn_core_configuration_set_selected_profile_complex_modifications_parameter(self.libkrbnCoreConfiguration, [name UTF8String], value);
 }
 
-- (BOOL)selectedProfileDeviceIgnore:(NSUInteger)vendorId
-                          productId:(NSUInteger)productId
-                         isKeyboard:(BOOL)isKeyboard
-                   isPointingDevice:(BOOL)isPointingDevice {
+- (BOOL)selectedProfileDeviceIgnore:(const libkrbn_device_identifiers*)deviceIdentifiers {
   return libkrbn_core_configuration_get_selected_profile_device_ignore(self.libkrbnCoreConfiguration,
-                                                                       (uint32_t)(vendorId),
-                                                                       (uint32_t)(productId),
-                                                                       isKeyboard,
-                                                                       isPointingDevice);
+                                                                       deviceIdentifiers);
 }
 
-- (void)setSelectedProfileDeviceIgnore:(NSUInteger)vendorId
-                             productId:(NSUInteger)productId
-                            isKeyboard:(BOOL)isKeyboard
-                      isPointingDevice:(BOOL)isPointingDevice
+- (void)setSelectedProfileDeviceIgnore:(const libkrbn_device_identifiers*)deviceIdentifiers
                                  value:(BOOL)value {
   libkrbn_core_configuration_set_selected_profile_device_ignore(self.libkrbnCoreConfiguration,
-                                                                (uint32_t)(vendorId),
-                                                                (uint32_t)(productId),
-                                                                isKeyboard,
-                                                                isPointingDevice,
+                                                                deviceIdentifiers,
                                                                 value);
 }
 
-- (BOOL)selectedProfileDeviceDisableBuiltInKeyboardIfExists:(NSUInteger)vendorId
-                                                  productId:(NSUInteger)productId
-                                                 isKeyboard:(BOOL)isKeyboard
-                                           isPointingDevice:(BOOL)isPointingDevice {
-  return libkrbn_core_configuration_get_selected_profile_device_disable_built_in_keyboard_if_exists(self.libkrbnCoreConfiguration,
-                                                                                                    (uint32_t)(vendorId),
-                                                                                                    (uint32_t)(productId),
-                                                                                                    isKeyboard,
-                                                                                                    isPointingDevice);
+- (BOOL)selectedProfileDeviceManipulateCapsLockLed:(const libkrbn_device_identifiers*)deviceIdentifiers {
+  return libkrbn_core_configuration_get_selected_profile_device_manipulate_caps_lock_led(self.libkrbnCoreConfiguration,
+                                                                                         deviceIdentifiers);
 }
 
-- (void)setSelectedProfileDeviceDisableBuiltInKeyboardIfExists:(NSUInteger)vendorId
-                                                     productId:(NSUInteger)productId
-                                                    isKeyboard:(BOOL)isKeyboard
-                                              isPointingDevice:(BOOL)isPointingDevice
+- (void)setSelectedProfileDeviceManipulateCapsLockLed:(const libkrbn_device_identifiers*)deviceIdentifiers
+                                                value:(BOOL)value {
+  libkrbn_core_configuration_set_selected_profile_device_manipulate_caps_lock_led(self.libkrbnCoreConfiguration,
+                                                                                  deviceIdentifiers,
+                                                                                  value);
+}
+
+- (BOOL)selectedProfileDeviceDisableBuiltInKeyboardIfExists:(const libkrbn_device_identifiers*)deviceIdentifiers {
+  return libkrbn_core_configuration_get_selected_profile_device_disable_built_in_keyboard_if_exists(self.libkrbnCoreConfiguration,
+                                                                                                    deviceIdentifiers);
+}
+
+- (void)setSelectedProfileDeviceDisableBuiltInKeyboardIfExists:(const libkrbn_device_identifiers*)deviceIdentifiers
                                                          value:(BOOL)value {
   libkrbn_core_configuration_set_selected_profile_device_disable_built_in_keyboard_if_exists(self.libkrbnCoreConfiguration,
-                                                                                             (uint32_t)(vendorId),
-                                                                                             (uint32_t)(productId),
-                                                                                             isKeyboard,
-                                                                                             isPointingDevice,
+                                                                                             deviceIdentifiers,
                                                                                              value);
 }
 
-- (NSString*)selectedProfileVirtualHIDKeyboardKeyboardType {
-  const char* p = libkrbn_core_configuration_get_selected_profile_virtual_hid_keyboard_keyboard_type(self.libkrbnCoreConfiguration);
-  if (p) {
-    return [NSString stringWithUTF8String:p];
-  }
-  return @"";
+- (NSInteger)selectedProfileVirtualHIDKeyboardCountryCode {
+  return libkrbn_core_configuration_get_selected_profile_virtual_hid_keyboard_country_code(self.libkrbnCoreConfiguration);
 }
 
-- (void)setSelectedProfileVirtualHIDKeyboardKeyboardType:(NSString*)value {
-  libkrbn_core_configuration_set_selected_profile_virtual_hid_keyboard_keyboard_type(self.libkrbnCoreConfiguration, [value UTF8String]);
-}
-
-- (NSInteger)selectedProfileVirtualHIDKeyboardCapsLockDelayMilliseconds {
-  return libkrbn_core_configuration_get_selected_profile_virtual_hid_keyboard_caps_lock_delay_milliseconds(self.libkrbnCoreConfiguration);
-}
-
-- (void)setSelectedProfileVirtualHIDKeyboardCapsLockDelayMilliseconds:(NSInteger)value {
-  libkrbn_core_configuration_set_selected_profile_virtual_hid_keyboard_caps_lock_delay_milliseconds(self.libkrbnCoreConfiguration, (uint32_t)(value));
+- (void)setSelectedProfileVirtualHIDKeyboardCountryCode:(NSInteger)value {
+  libkrbn_core_configuration_set_selected_profile_virtual_hid_keyboard_country_code(self.libkrbnCoreConfiguration, (uint8_t)(value));
 }
 
 @end

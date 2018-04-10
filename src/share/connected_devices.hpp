@@ -1,8 +1,12 @@
 #pragma once
 
-#include "core_configuration.hpp"
+#include "filesystem.hpp"
+#include "json_utility.hpp"
 #include "logger.hpp"
+#include "types.hpp"
 #include <algorithm>
+#include <fstream>
+#include <json/json.hpp>
 
 // Json example:
 //
@@ -18,7 +22,8 @@
 //             "product_id": 515,
 //             "vendor_id": 1278
 //         },
-//         "is_built_in_keyboard": false
+//         "is_built_in_keyboard": false,
+//         "is_built_in_trackpad": false
 //     },
 //     {
 //         "descriptions": {
@@ -31,7 +36,8 @@
 //             "product_id": 610,
 //             "vendor_id": 1452
 //         },
-//         "is_built_in_keyboard": true
+//         "is_built_in_keyboard": true,
+//         "is_built_in_trackpad": false
 //     }
 // ]
 
@@ -47,17 +53,12 @@ public:
                                                  product_(product) {
       }
       descriptions(const nlohmann::json& json) {
-        {
-          const std::string key = "manufacturer";
-          if (json.find(key) != json.end() && json[key].is_string()) {
-            manufacturer_ = json[key];
-          }
+        if (auto v = json_utility::find_optional<std::string>(json, "manufacturer")) {
+          manufacturer_ = *v;
         }
-        {
-          const std::string key = "product";
-          if (json.find(key) != json.end() && json[key].is_string()) {
-            product_ = json[key];
-          }
+
+        if (auto v = json_utility::find_optional<std::string>(json, "product")) {
+          product_ = *v;
         }
       }
 
@@ -90,19 +91,23 @@ public:
     };
 
     device(const descriptions& descriptions,
-           const core_configuration::profile::device::identifiers& identifiers,
-           bool is_built_in_keyboard) : descriptions_(descriptions),
+           const device_identifiers& identifiers,
+           bool is_built_in_keyboard,
+           bool is_built_in_trackpad) : descriptions_(descriptions),
                                         identifiers_(identifiers),
-                                        is_built_in_keyboard_(is_built_in_keyboard) {
+                                        is_built_in_keyboard_(is_built_in_keyboard),
+                                        is_built_in_trackpad_(is_built_in_trackpad) {
     }
-    device(const nlohmann::json& json) : descriptions_(json.find("descriptions") != json.end() ? json["descriptions"] : nlohmann::json()),
-                                         identifiers_(json.find("identifiers") != json.end() ? json["identifiers"] : nlohmann::json()),
-                                         is_built_in_keyboard_(false) {
-      {
-        const std::string key = "is_built_in_keyboard";
-        if (json.find(key) != json.end() && json[key].is_boolean()) {
-          is_built_in_keyboard_ = json[key];
-        }
+    device(const nlohmann::json& json) : descriptions_(json_utility::find_copy(json, "descriptions", nlohmann::json())),
+                                         identifiers_(json_utility::find_copy(json, "identifiers", nlohmann::json())),
+                                         is_built_in_keyboard_(false),
+                                         is_built_in_trackpad_(false) {
+      if (auto v = json_utility::find_optional<bool>(json, "is_built_in_keyboard")) {
+        is_built_in_keyboard_ = *v;
+      }
+
+      if (auto v = json_utility::find_optional<bool>(json, "is_built_in_trackpad")) {
+        is_built_in_trackpad_ = *v;
       }
     }
 
@@ -111,6 +116,7 @@ public:
           {"descriptions", descriptions_},
           {"identifiers", identifiers_},
           {"is_built_in_keyboard", is_built_in_keyboard_},
+          {"is_built_in_trackpad", is_built_in_trackpad_},
       });
     }
 
@@ -118,12 +124,16 @@ public:
       return descriptions_;
     }
 
-    const core_configuration::profile::device::identifiers& get_identifiers(void) const {
+    const device_identifiers& get_identifiers(void) const {
       return identifiers_;
     }
 
     bool get_is_built_in_keyboard(void) const {
       return is_built_in_keyboard_;
+    }
+
+    bool get_is_built_in_trackpad(void) const {
+      return is_built_in_trackpad_;
     }
 
     bool operator==(const device& other) const {
@@ -132,8 +142,9 @@ public:
 
   private:
     descriptions descriptions_;
-    core_configuration::profile::device::identifiers identifiers_;
+    device_identifiers identifiers_;
     bool is_built_in_keyboard_;
+    bool is_built_in_trackpad_;
   };
 
   connected_devices(void) : loaded_(true) {
@@ -173,32 +184,26 @@ public:
     devices_.push_back(device);
 
     std::sort(devices_.begin(), devices_.end(), [](const class device& a, const class device& b) {
-      auto a_v = a.get_identifiers().get_vendor_id();
-      auto a_p = a.get_identifiers().get_product_id();
+      auto a_name = a.get_descriptions().get_product() + a.get_descriptions().get_manufacturer();
       auto a_kb = a.get_identifiers().get_is_keyboard();
       auto a_pd = a.get_identifiers().get_is_pointing_device();
 
-      auto b_v = b.get_identifiers().get_vendor_id();
-      auto b_p = b.get_identifiers().get_product_id();
+      auto b_name = b.get_descriptions().get_product() + b.get_descriptions().get_manufacturer();
       auto b_kb = b.get_identifiers().get_is_keyboard();
       auto b_pd = b.get_identifiers().get_is_pointing_device();
 
-      if (a_v == b_v) {
-        if (a_p == b_p) {
-          if (a_kb == b_kb) {
-            if (a_pd == b_pd) {
-              return false;
-            } else {
-              return a_pd;
-            }
+      if (a_name == b_name) {
+        if (a_kb == b_kb) {
+          if (a_pd == b_pd) {
+            return false;
           } else {
-            return a_kb;
+            return a_pd;
           }
         } else {
-          return a_p < b_p;
+          return a_kb;
         }
       } else {
-        return a_v < b_v;
+        return a_name < b_name;
       }
       return true;
     });
@@ -209,14 +214,7 @@ public:
 
   bool save_to_file(const std::string& file_path) {
     filesystem::create_directory_with_intermediate_directories(filesystem::dirname(file_path), 0755);
-
-    std::ofstream output(file_path);
-    if (!output) {
-      return false;
-    }
-
-    output << std::setw(4) << to_json() << std::endl;
-    return true;
+    return json_utility::save_to_file(to_json(), file_path);
   }
 
 private:

@@ -2,132 +2,81 @@
 
 class device final {
 public:
-  class identifiers final {
-  public:
-    identifiers(const nlohmann::json& json) : json_(json),
-                                              vendor_id_(vendor_id(0)),
-                                              product_id_(product_id(0)),
-                                              is_keyboard_(false),
-                                              is_pointing_device_(false) {
-      {
-        const std::string key = "vendor_id";
-        if (json.find(key) != json.end() && json[key].is_number()) {
-          vendor_id_ = vendor_id(static_cast<uint32_t>(json[key]));
-        }
-      }
-      {
-        const std::string key = "product_id";
-        if (json.find(key) != json.end() && json[key].is_number()) {
-          product_id_ = product_id(static_cast<uint32_t>(json[key]));
-        }
-      }
-      {
-        const std::string key = "is_keyboard";
-        if (json.find(key) != json.end() && json[key].is_boolean()) {
-          is_keyboard_ = json[key];
-        }
-      }
-      {
-        const std::string key = "is_pointing_device";
-        if (json.find(key) != json.end() && json[key].is_boolean()) {
-          is_pointing_device_ = json[key];
-        }
-      }
-    }
-
-    identifiers(vendor_id vendor_id,
-                product_id product_id,
-                bool is_keyboard,
-                bool is_pointing_device) : identifiers(nlohmann::json({
-                                               {"vendor_id", static_cast<uint32_t>(vendor_id)},
-                                               {"product_id", static_cast<uint32_t>(product_id)},
-                                               {"is_keyboard", is_keyboard},
-                                               {"is_pointing_device", is_pointing_device},
-                                           })) {
-    }
-
-    nlohmann::json to_json(void) const {
-      auto j = json_;
-      j["vendor_id"] = static_cast<uint32_t>(vendor_id_);
-      j["product_id"] = static_cast<uint32_t>(product_id_);
-      j["is_keyboard"] = is_keyboard_;
-      j["is_pointing_device"] = is_pointing_device_;
-      return j;
-    }
-
-    vendor_id get_vendor_id(void) const {
-      return vendor_id_;
-    }
-    void set_vendor_id(vendor_id value) {
-      vendor_id_ = value;
-    }
-
-    product_id get_product_id(void) const {
-      return product_id_;
-    }
-    void set_product_id(product_id value) {
-      product_id_ = value;
-    }
-
-    bool get_is_keyboard(void) const {
-      return is_keyboard_;
-    }
-    void set_is_keyboard(bool value) {
-      is_keyboard_ = value;
-    }
-
-    bool get_is_pointing_device(void) const {
-      return is_pointing_device_;
-    }
-    void set_is_pointing_device(bool value) {
-      is_pointing_device_ = value;
-    }
-
-    bool operator==(const identifiers& other) const {
-      return vendor_id_ == other.vendor_id_ &&
-             product_id_ == other.product_id_ &&
-             is_keyboard_ == other.is_keyboard_ &&
-             is_pointing_device_ == other.is_pointing_device_;
-    }
-
-  private:
-    nlohmann::json json_;
-    vendor_id vendor_id_;
-    product_id product_id_;
-    bool is_keyboard_;
-    bool is_pointing_device_;
-  };
-
   device(const nlohmann::json& json) : json_(json),
-                                       identifiers_(json.find("identifiers") != json.end() ? json["identifiers"] : nlohmann::json()),
+                                       identifiers_(json_utility::find_copy(json, "identifiers", nlohmann::json())),
                                        ignore_(false),
-                                       disable_built_in_keyboard_if_exists_(false) {
-    {
-      const std::string key = "ignore";
-      if (json.find(key) != json.end() && json[key].is_boolean()) {
-        ignore_ = json[key];
-      }
+                                       manipulate_caps_lock_led_(false),
+                                       disable_built_in_keyboard_if_exists_(false),
+                                       simple_modifications_(json_utility::find_copy(json, "simple_modifications", nlohmann::json::array())),
+                                       fn_function_keys_(make_default_fn_function_keys_json()) {
+    // ----------------------------------------
+    // Set default value
+
+    // ignore_
+
+    if (identifiers_.get_is_pointing_device()) {
+      ignore_ = true;
+    } else if (identifiers_.get_vendor_id() == vendor_id(0x05ac) &&
+               identifiers_.get_product_id() == product_id(0x8600)) {
+      // Touch Bar on MacBook Pro 2016
+      ignore_ = true;
+    } else if (identifiers_.get_vendor_id() == vendor_id(0x1050)) {
+      // YubiKey token
+      ignore_ = true;
     }
-    {
-      const std::string key = "disable_built_in_keyboard_if_exists";
-      if (json.find(key) != json.end() && json[key].is_boolean()) {
-        disable_built_in_keyboard_if_exists_ = json[key];
-      }
+
+    // manipulate_caps_lock_led_
+
+    if (identifiers_.get_is_keyboard() &&
+        identifiers_.is_apple()) {
+      manipulate_caps_lock_led_ = true;
     }
+
+    // ----------------------------------------
+    // Load from json
+
+    if (auto v = json_utility::find_optional<bool>(json, "ignore")) {
+      ignore_ = *v;
+    }
+
+    if (auto v = json_utility::find_optional<bool>(json, "manipulate_caps_lock_led")) {
+      manipulate_caps_lock_led_ = *v;
+    }
+
+    if (auto v = json_utility::find_optional<bool>(json, "disable_built_in_keyboard_if_exists")) {
+      disable_built_in_keyboard_if_exists_ = *v;
+    }
+
+    if (auto v = json_utility::find_json(json, "fn_function_keys")) {
+      fn_function_keys_.update(*v);
+    }
+  }
+
+  static nlohmann::json make_default_fn_function_keys_json(void) {
+    auto json = nlohmann::json::array();
+
+    for (int i = 1; i <= 12; ++i) {
+      json.push_back(nlohmann::json::object({
+          {"from", nlohmann::json::object({{"key_code", fmt::format("f{0}", i)}})},
+          {"to", nlohmann::json::object()},
+      }));
+    }
+
+    return json;
   }
 
   nlohmann::json to_json(void) const {
     auto j = json_;
     j["identifiers"] = identifiers_;
     j["ignore"] = ignore_;
+    j["manipulate_caps_lock_led"] = manipulate_caps_lock_led_;
     j["disable_built_in_keyboard_if_exists"] = disable_built_in_keyboard_if_exists_;
+    j["simple_modifications"] = simple_modifications_;
+    j["fn_function_keys"] = fn_function_keys_;
     return j;
   }
 
-  const identifiers& get_identifiers(void) const {
-    return identifiers_;
-  }
-  identifiers& get_identifiers(void) {
+  const device_identifiers& get_identifiers(void) const {
     return identifiers_;
   }
 
@@ -138,6 +87,13 @@ public:
     ignore_ = value;
   }
 
+  bool get_manipulate_caps_lock_led(void) const {
+    return manipulate_caps_lock_led_;
+  }
+  void set_manipulate_caps_lock_led(bool value) {
+    manipulate_caps_lock_led_ = value;
+  }
+
   bool get_disable_built_in_keyboard_if_exists(void) const {
     return disable_built_in_keyboard_if_exists_;
   }
@@ -145,9 +101,26 @@ public:
     disable_built_in_keyboard_if_exists_ = value;
   }
 
+  const simple_modifications& get_simple_modifications(void) const {
+    return simple_modifications_;
+  }
+  simple_modifications& get_simple_modifications(void) {
+    return simple_modifications_;
+  }
+
+  const simple_modifications& get_fn_function_keys(void) const {
+    return fn_function_keys_;
+  }
+  simple_modifications& get_fn_function_keys(void) {
+    return fn_function_keys_;
+  }
+
 private:
   nlohmann::json json_;
-  identifiers identifiers_;
+  device_identifiers identifiers_;
   bool ignore_;
+  bool manipulate_caps_lock_led_;
   bool disable_built_in_keyboard_if_exists_;
+  simple_modifications simple_modifications_;
+  simple_modifications fn_function_keys_;
 };

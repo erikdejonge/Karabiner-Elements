@@ -1,0 +1,146 @@
+[
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "a",
+            "type": "key_code"
+        },
+        "event_type": "key_down",
+        "lazy": false,
+        "original_event": {
+            "key_code": "a",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 1000000000
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "b",
+            "type": "key_code"
+        },
+        "event_type": "key_down",
+        "lazy": false,
+        "original_event": {
+            "key_code": "b",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 1000000001
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "c",
+            "type": "key_code"
+        },
+        "event_type": "key_down",
+        "lazy": false,
+        "original_event": {
+            "key_code": "c",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 1000000002
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "a",
+            "type": "key_code"
+        },
+        "event_type": "key_up",
+        "lazy": false,
+        "original_event": {
+            "key_code": "a",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 1000000003
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "b",
+            "type": "key_code"
+        },
+        "event_type": "key_up",
+        "lazy": false,
+        "original_event": {
+            "key_code": "b",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 1000000004
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "pointing_motion": {
+                "x": -10
+            },
+            "type": "pointing_motion"
+        },
+        "event_type": "single",
+        "lazy": false,
+        "original_event": {
+            "pointing_motion": {
+                "x": -10
+            },
+            "type": "pointing_motion"
+        },
+        "event_time_stamp": {
+            "time_stamp": 1000000005
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "key_code": "c",
+            "type": "key_code"
+        },
+        "event_type": "key_up",
+        "lazy": false,
+        "original_event": {
+            "key_code": "c",
+            "type": "key_code"
+        },
+        "event_time_stamp": {
+            "time_stamp": 1000000006
+        },
+        "valid": true
+    },
+    {
+        "device_id": 1,
+        "event": {
+            "pointing_motion": {
+                "x": -10
+            },
+            "type": "pointing_motion"
+        },
+        "event_type": "single",
+        "lazy": false,
+        "original_event": {
+            "pointing_motion": {
+                "x": -10
+            },
+            "type": "pointing_motion"
+        },
+        "event_time_stamp": {
+            "time_stamp": 1000000007
+        },
+        "valid": true
+    }
+]

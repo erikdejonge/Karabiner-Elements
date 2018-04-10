@@ -34,6 +34,10 @@ public:
     }
   }
 
+  void close(void) {
+    close_connection();
+  }
+
   bool is_connected(void) const {
     return connect_ != IO_OBJECT_NULL;
   }
@@ -53,8 +57,7 @@ public:
 
     call_method([this](void) {
       logger::get_logger().info("initialize_virtual_hid_keyboard");
-      logger::get_logger().info("  keyboard_type:{0}", static_cast<uint32_t>(virtual_hid_keyboard_properties_.keyboard_type));
-      logger::get_logger().info("  caps_lock_delay_milliseconds:{0}", static_cast<uint64_t>(virtual_hid_keyboard_properties_.caps_lock_delay_milliseconds));
+      logger::get_logger().info("  country_code:{0}", static_cast<uint32_t>(virtual_hid_keyboard_properties_.country_code));
 
       bool result = pqrs::karabiner_virtual_hid_device_methods::initialize_virtual_hid_keyboard(connect_, virtual_hid_keyboard_properties_);
 
@@ -93,13 +96,25 @@ public:
     });
   }
 
-  void dispatch_keyboard_event(const pqrs::karabiner_virtual_hid_device::hid_event_service::keyboard_event& keyboard_event) {
-    call_method([this, &keyboard_event](void) {
-      return pqrs::karabiner_virtual_hid_device_methods::dispatch_keyboard_event(connect_, keyboard_event);
+  void post_keyboard_input_report(const pqrs::karabiner_virtual_hid_device::hid_report::keyboard_input& report) {
+    call_method([this, &report](void) {
+      return pqrs::karabiner_virtual_hid_device_methods::post_keyboard_input_report(connect_, report);
     });
   }
 
-  void post_keyboard_input_report(const pqrs::karabiner_virtual_hid_device::hid_report::keyboard_input& report) {
+  void post_keyboard_input_report(const pqrs::karabiner_virtual_hid_device::hid_report::consumer_input& report) {
+    call_method([this, &report](void) {
+      return pqrs::karabiner_virtual_hid_device_methods::post_keyboard_input_report(connect_, report);
+    });
+  }
+
+  void post_keyboard_input_report(const pqrs::karabiner_virtual_hid_device::hid_report::apple_vendor_top_case_input& report) {
+    call_method([this, &report](void) {
+      return pqrs::karabiner_virtual_hid_device_methods::post_keyboard_input_report(connect_, report);
+    });
+  }
+
+  void post_keyboard_input_report(const pqrs::karabiner_virtual_hid_device::hid_report::apple_vendor_keyboard_input& report) {
     call_method([this, &report](void) {
       return pqrs::karabiner_virtual_hid_device_methods::post_keyboard_input_report(connect_, report);
     });
@@ -186,6 +201,8 @@ private:
   }
 
   void close_connection(void) {
+    logger::get_logger().info("virtual_hid_device_client::close_connection");
+
     if (connect_) {
       auto kr = IOServiceClose(connect_);
       if (kr != kIOReturnSuccess) {
@@ -193,8 +210,6 @@ private:
       }
       connect_ = IO_OBJECT_NULL;
     }
-
-    logger::get_logger().info("IOServiceClose is succeeded @ {0}", __PRETTY_FUNCTION__);
 
     if (service_) {
       IOObjectRelease(service_);
@@ -215,7 +230,9 @@ private:
 
     auto kr = method();
     if (kr != KERN_SUCCESS) {
-      logger::get_logger().error("IOConnectCallStructMethod error: {1} ({2}) @ {0}", __PRETTY_FUNCTION__, iokit_utility::get_error_name(kr), kr);
+      if (virtual_hid_keyboard_ready_) {
+        logger::get_logger().error("IOConnectCallStructMethod error: {1} ({2}) @ {0}", __PRETTY_FUNCTION__, iokit_utility::get_error_name(kr), kr);
+      }
       return false;
     }
 

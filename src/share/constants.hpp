@@ -28,6 +28,10 @@ public:
     return "/Library/Application Support/org.pqrs/tmp/karabiner_grabber_devices.json";
   }
 
+  static const char* get_device_details_json_file_path(void) {
+    return "/Library/Application Support/org.pqrs/tmp/karabiner_grabber_device_details.json";
+  }
+
   static const char* get_manipulator_environment_json_file_path(void) {
     return "/Library/Application Support/org.pqrs/tmp/karabiner_grabber_manipulator_environment.json";
   }
@@ -178,6 +182,10 @@ public:
 
   static const char* get_distributed_notification_console_user_server_is_disabled(void) {
     return "console_user_server_is_disabled";
+  }
+
+  static const char* get_distributed_notification_device_grabbing_state_is_changed(void) {
+    return "device_grabbing_state_is_changed";
   }
 };
 } // namespace krbn

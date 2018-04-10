@@ -38,9 +38,9 @@ public:
     client_->send_to(reinterpret_cast<uint8_t*>(&s), sizeof(s));
   }
 
-  void system_preferences_values_updated(const system_preferences::values& values) {
-    operation_type_system_preferences_values_updated_struct s;
-    s.values = values;
+  void system_preferences_updated(const system_preferences& system_preferences) {
+    operation_type_system_preferences_updated_struct s;
+    s.system_preferences = system_preferences;
     client_->send_to(reinterpret_cast<uint8_t*>(&s), sizeof(s));
   }
 
@@ -55,6 +55,30 @@ public:
     strlcpy(s.file_path,
             file_path.c_str(),
             sizeof(s.file_path));
+
+    client_->send_to(reinterpret_cast<uint8_t*>(&s), sizeof(s));
+  }
+
+  void input_source_changed(const input_source_identifiers& input_source_identifiers) {
+    operation_type_input_source_changed_struct s;
+
+    if (auto& v = input_source_identifiers.get_language()) {
+      strlcpy(s.language,
+              v->c_str(),
+              sizeof(s.language));
+    }
+
+    if (auto& v = input_source_identifiers.get_input_source_id()) {
+      strlcpy(s.input_source_id,
+              v->c_str(),
+              sizeof(s.input_source_id));
+    }
+
+    if (auto& v = input_source_identifiers.get_input_mode_id()) {
+      strlcpy(s.input_mode_id,
+              v->c_str(),
+              sizeof(s.input_mode_id));
+    }
 
     client_->send_to(reinterpret_cast<uint8_t*>(&s), sizeof(s));
   }

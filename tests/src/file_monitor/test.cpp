@@ -1,4 +1,4 @@
-#define CATCH_CONFIG_RUNNER
+#define CATCH_CONFIG_MAIN
 #include "../../vendor/catch/catch.hpp"
 
 #include "boost_defs.hpp"
@@ -12,12 +12,39 @@ namespace {
 std::atomic<time_t> last_callback_time;
 } // namespace
 
+TEST_CASE("initialize") {
+  krbn::thread_utility::register_main_thread();
+
+  last_callback_time = time(nullptr);
+
+  {
+    auto l = spdlog::stdout_logger_mt("karabiner");
+    l->set_level(spdlog::level::off);
+    krbn::logger::set_logger(l);
+  }
+
+  // watchdog timer
+  krbn::gcd_utility::main_queue_timer timer(
+      dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC),
+      1.0 * NSEC_PER_SEC,
+      0,
+      ^{
+        time_t now = time(nullptr);
+
+        if (now - last_callback_time > 10) {
+          exit(1);
+        }
+      });
+}
+
 TEST_CASE("file_monitor") {
   std::vector<std::pair<std::string, std::vector<std::string>>> targets({
       {
-          "target/sub", {
-                            "target/sub/file1", "target/sub/file2",
-                        },
+          "target/sub",
+          {
+              "target/sub/file1",
+              "target/sub/file2",
+          },
       },
   });
   krbn::file_monitor file_monitor(targets, [](const std::string& file_path) {
@@ -71,31 +98,4 @@ TEST_CASE("file_monitor") {
   });
 
   CFRunLoopRun();
-}
-
-int main(int argc, char* const argv[]) {
-  krbn::thread_utility::register_main_thread();
-
-  last_callback_time = time(nullptr);
-
-  {
-    auto l = spdlog::stdout_logger_mt("karabiner");
-    l->set_level(spdlog::level::off);
-    krbn::logger::set_logger(l);
-  }
-
-  // watchdog timer
-  krbn::gcd_utility::main_queue_timer timer(
-      dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC),
-      1.0 * NSEC_PER_SEC,
-      0,
-      ^{
-        time_t now = time(nullptr);
-
-        if (now - last_callback_time > 10) {
-          exit(1);
-        }
-      });
-
-  return Catch::Session().run(argc, argv);
 }

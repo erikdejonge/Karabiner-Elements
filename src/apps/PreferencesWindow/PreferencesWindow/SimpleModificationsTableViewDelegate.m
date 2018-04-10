@@ -23,8 +23,10 @@
     result.popUpButton.target = self.simpleModificationsTableViewController;
     result.popUpButton.menu = [self.simpleModificationsMenuManager.fromMenu copy];
 
-    NSString* fromValue = [coreConfigurationModel selectedProfileSimpleModificationFirstAtIndex:row];
-    [SimpleModificationsTableViewController selectPopUpButtonMenu:result.popUpButton representedObject:fromValue];
+    NSInteger connectedDeviceIndex = self.simpleModificationsTableViewController.selectedConnectedDeviceIndex;
+    NSString* from = [coreConfigurationModel selectedProfileSimpleModificationFromJsonStringAtIndex:row
+                                                                               connectedDeviceIndex:connectedDeviceIndex];
+    [SimpleModificationsTableViewController selectPopUpButtonMenu:result.popUpButton definition:from];
 
     return result;
   }
@@ -37,15 +39,18 @@
     result.popUpButton.menu = [self.simpleModificationsMenuManager.toMenu copy];
 
     KarabinerKitCoreConfigurationModel* coreConfigurationModel = [KarabinerKitConfigurationManager sharedManager].coreConfigurationModel;
-    NSString* fromValue = [coreConfigurationModel selectedProfileSimpleModificationFirstAtIndex:row];
-    if ([fromValue length] > 0) {
+    NSInteger connectedDeviceIndex = self.simpleModificationsTableViewController.selectedConnectedDeviceIndex;
+    NSString* from = [coreConfigurationModel selectedProfileSimpleModificationFromJsonStringAtIndex:row
+                                                                               connectedDeviceIndex:connectedDeviceIndex];
+    if ([from length] > 0) {
       result.popUpButton.enabled = YES;
     } else {
       result.popUpButton.enabled = NO;
     }
 
-    NSString* toValue = [coreConfigurationModel selectedProfileSimpleModificationSecondAtIndex:row];
-    [SimpleModificationsTableViewController selectPopUpButtonMenu:result.popUpButton representedObject:toValue];
+    NSString* to = [coreConfigurationModel selectedProfileSimpleModificationToJsonStringAtIndex:row
+                                                                           connectedDeviceIndex:connectedDeviceIndex];
+    [SimpleModificationsTableViewController selectPopUpButtonMenu:result.popUpButton definition:to];
 
     return result;
   }

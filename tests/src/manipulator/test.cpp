@@ -1,62 +1,18 @@
-#define CATCH_CONFIG_RUNNER
+#define CATCH_CONFIG_MAIN
 #include "../../vendor/catch/catch.hpp"
 
+#include "../share/manipulator_helper.hpp"
 #include "manipulator/details/post_event_to_virtual_devices.hpp"
-#include "manipulator/manipulator_factory.hpp"
-#include "manipulator/manipulator_manager.hpp"
-#include "manipulator/manipulator_managers_connector.hpp"
 #include "thread_utility.hpp"
 #include <boost/optional/optional_io.hpp>
 
-#define ENQUEUE_EVENT(QUEUE, DEVICE_ID, TIME_STAMP, EVENT, EVENT_TYPE, ORIGINAL_EVENT) \
-  QUEUE.emplace_back_event(krbn::device_id(DEVICE_ID),                                 \
-                           TIME_STAMP,                                                 \
-                           EVENT,                                                      \
-                           krbn::event_type::EVENT_TYPE,                               \
-                           ORIGINAL_EVENT);
-
-#define ENQUEUE_LAZY_EVENT(QUEUE, DEVICE_ID, TIME_STAMP, EVENT, EVENT_TYPE, ORIGINAL_EVENT) \
-  QUEUE.emplace_back_event(krbn::device_id(DEVICE_ID),                                      \
-                           TIME_STAMP,                                                      \
-                           EVENT,                                                           \
-                           krbn::event_type::EVENT_TYPE,                                    \
-                           ORIGINAL_EVENT,                                                  \
-                           true);
-
-#define PUSH_BACK_QUEUED_EVENT(VECTOR, DEVICE_ID, TIME_STAMP, EVENT, EVENT_TYPE, ORIGINAL_EVENT) \
-  VECTOR.push_back(krbn::event_queue::queued_event(krbn::device_id(DEVICE_ID),                   \
-                                                   TIME_STAMP,                                   \
-                                                   EVENT,                                        \
-                                                   krbn::event_type::EVENT_TYPE,                 \
-                                                   ORIGINAL_EVENT))
-
-#define PUSH_BACK_LAZY_QUEUED_EVENT(VECTOR, DEVICE_ID, TIME_STAMP, EVENT, EVENT_TYPE, ORIGINAL_EVENT) \
-  VECTOR.push_back(krbn::event_queue::queued_event(krbn::device_id(DEVICE_ID),                        \
-                                                   TIME_STAMP,                                        \
-                                                   EVENT,                                             \
-                                                   krbn::event_type::EVENT_TYPE,                      \
-                                                   ORIGINAL_EVENT,                                    \
-                                                   true))
-
-namespace {
-krbn::event_queue::queued_event::event a_event(krbn::key_code::a);
-krbn::event_queue::queued_event::event escape_event(krbn::key_code::escape);
-krbn::event_queue::queued_event::event f1_event(krbn::key_code::f1);
-krbn::event_queue::queued_event::event fn_event(krbn::key_code::fn);
-krbn::event_queue::queued_event::event left_control_event(krbn::key_code::left_control);
-krbn::event_queue::queued_event::event left_shift_event(krbn::key_code::left_shift);
-krbn::event_queue::queued_event::event page_up_event(krbn::key_code::page_up);
-krbn::event_queue::queued_event::event right_shift_event(krbn::key_code::right_shift);
-krbn::event_queue::queued_event::event spacebar_event(krbn::key_code::spacebar);
-krbn::event_queue::queued_event::event tab_event(krbn::key_code::tab);
-krbn::event_queue::queued_event::event up_arrow_event(krbn::key_code::up_arrow);
-
-auto device_ungrabbed_event = krbn::event_queue::queued_event::event::make_device_ungrabbed_event();
-} // namespace
-
 using krbn::manipulator::details::event_definition;
-using krbn::manipulator::details::from_event_definition;
+using krbn::manipulator::details::modifier_definition;
 using krbn::manipulator::details::to_event_definition;
+
+TEST_CASE("initialize") {
+  krbn::thread_utility::register_main_thread();
+}
 
 TEST_CASE("manipulator.manipulator_factory") {
   {
@@ -72,30 +28,36 @@ TEST_CASE("manipulator.manipulator_factory") {
     nlohmann::json json({
         {"type", "basic"},
         {
-            "from", {
-                        {
-                            "key_code", "escape",
-                        },
-                        {
-                            "modifiers", {
-                                             {"mandatory", {
-                                                               "left_shift", "left_option",
-                                                           }},
-                                             {"optional", {
-                                                              "any",
-                                                          }},
-                                         },
-                        },
+            "from",
+            {
+                {
+                    "key_code",
+                    "escape",
+                },
+                {
+                    "modifiers",
+                    {
+                        {"mandatory", {
+                                          "left_shift",
+                                          "left_option",
+                                      }},
+                        {"optional", {
+                                         "any",
+                                     }},
                     },
+                },
+            },
         },
         {
-            "to", {
-                      {
-                          {
-                              "pointing_button", "button1",
-                          },
-                      },
-                  },
+            "to",
+            {
+                {
+                    {
+                        "pointing_button",
+                        "button1",
+                    },
+                },
+            },
         },
     });
     krbn::core_configuration::profile::complex_modifications::parameters parameters;
@@ -106,445 +68,110 @@ TEST_CASE("manipulator.manipulator_factory") {
     REQUIRE(manipulator->active() == false);
 
     auto basic = dynamic_cast<krbn::manipulator::details::basic*>(manipulator.get());
-    REQUIRE(basic->get_from().get_type() == event_definition::type::key_code);
-    REQUIRE(basic->get_from().get_key_code() == krbn::key_code::escape);
-    REQUIRE(basic->get_from().get_pointing_button() == boost::none);
-    REQUIRE(basic->get_from().get_mandatory_modifiers() == std::unordered_set<event_definition::modifier>({
-                                                               event_definition::modifier::left_shift,
-                                                               event_definition::modifier::left_option,
+    REQUIRE(basic->get_from().get_event_definitions().size() == 1);
+    REQUIRE(basic->get_from().get_event_definitions().front().get_type() == event_definition::type::key_code);
+    REQUIRE(basic->get_from().get_event_definitions().front().get_key_code() == krbn::key_code::escape);
+    REQUIRE(basic->get_from().get_event_definitions().front().get_pointing_button() == boost::none);
+    REQUIRE(basic->get_from().get_mandatory_modifiers() == std::unordered_set<modifier_definition::modifier>({
+                                                               modifier_definition::modifier::left_shift,
+                                                               modifier_definition::modifier::left_option,
                                                            }));
-    REQUIRE(basic->get_from().get_optional_modifiers() == std::unordered_set<event_definition::modifier>({
-                                                              event_definition::modifier::any,
+    REQUIRE(basic->get_from().get_optional_modifiers() == std::unordered_set<modifier_definition::modifier>({
+                                                              modifier_definition::modifier::any,
                                                           }));
     REQUIRE(basic->get_to().size() == 1);
-    REQUIRE(basic->get_to()[0].get_type() == event_definition::type::pointing_button);
-    REQUIRE(basic->get_to()[0].get_key_code() == boost::none);
-    REQUIRE(basic->get_to()[0].get_pointing_button() == krbn::pointing_button::button1);
-    REQUIRE(basic->get_to()[0].get_modifiers() == std::unordered_set<event_definition::modifier>());
+    REQUIRE(basic->get_to()[0].get_event_definition().get_type() == event_definition::type::pointing_button);
+    REQUIRE(basic->get_to()[0].get_event_definition().get_key_code() == boost::none);
+    REQUIRE(basic->get_to()[0].get_event_definition().get_pointing_button() == krbn::pointing_button::button1);
+    REQUIRE(basic->get_to()[0].get_modifiers() == std::unordered_set<modifier_definition::modifier>());
   }
 }
 
 TEST_CASE("manipulator.manipulator_manager") {
-  {
-    // ----------------------------------------
-    // manipulator_manager
+  krbn::unit_testing::manipulator_helper::run_tests(nlohmann::json::parse(std::ifstream("json/manipulator_manager/tests.json")));
+}
 
-    krbn::manipulator::manipulator_manager manipulator_manager;
-    {
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::spacebar, {}, {}),
-                                                                             to_event_definition(krbn::key_code::tab, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
+TEST_CASE("min_input_event_time_stamp") {
+  std::vector<std::shared_ptr<krbn::event_queue>> event_queues;
+  event_queues.push_back(std::make_shared<krbn::event_queue>());
+  event_queues.push_back(std::make_shared<krbn::event_queue>());
+  event_queues.push_back(std::make_shared<krbn::event_queue>());
+  event_queues.push_back(std::make_shared<krbn::event_queue>());
+  event_queues.push_back(std::make_shared<krbn::event_queue>());
 
-    krbn::event_queue input_event_queue;
-    krbn::event_queue output_event_queue;
+  krbn::manipulator::manipulator_managers_connector connector;
 
-    krbn::manipulator::manipulator_managers_connector connector;
-    connector.emplace_back_connection(manipulator_manager,
-                                      input_event_queue,
-                                      output_event_queue);
+  std::vector<krbn::manipulator::manipulator_manager> manipulator_managers(event_queues.size() - 1);
 
-    // ----------------------------------------
-    // event_queue
-
-    ENQUEUE_EVENT(input_event_queue, 1, 100, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 200, escape_event, key_down, escape_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 300, spacebar_event, key_up, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 400, escape_event, key_up, escape_event);
-
-    // ----------------------------------------
-    // test
-
-    connector.manipulate();
-
-    std::vector<krbn::event_queue::queued_event> expected;
-    PUSH_BACK_QUEUED_EVENT(expected, 1, 100, tab_event, key_down, spacebar_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, 200, escape_event, key_down, escape_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, 300, tab_event, key_up, spacebar_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, 400, escape_event, key_up, escape_event);
-
-    REQUIRE(input_event_queue.get_events().empty());
-    REQUIRE(output_event_queue.get_events() == expected);
+  for (size_t i = 0; i < manipulator_managers.size(); ++i) {
+    connector.emplace_back_connection(manipulator_managers[i],
+                                      event_queues[i],
+                                      event_queues[i + 1]);
   }
 
-  {
-    // ----------------------------------------
-    // manipulator_manager (multiple manipulators)
-
-    krbn::manipulator::manipulator_manager manipulator_manager;
-    {
-      // spacebar -> tab
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::spacebar, {}, {}),
-                                                                             to_event_definition(krbn::key_code::tab, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-    {
-      // spacebar -> escape
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::spacebar, {}, {}),
-                                                                             to_event_definition(krbn::key_code::escape, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-    {
-      // tab -> a
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::tab,
-                                                                                                   {},
-                                                                                                   {
-                                                                                                       event_definition::modifier::any,
-                                                                                                   }),
-                                                                             to_event_definition(krbn::key_code::a, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-    {
-      // escape -> left_shift
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::escape, {}, {}),
-                                                                             to_event_definition(krbn::key_code::left_shift, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-    {
-      // left_shift -> tab
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::left_shift, {}, {}),
-                                                                             to_event_definition(krbn::key_code::tab, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-    {
-      // f1 -> empty
-      krbn::core_configuration::profile::complex_modifications::parameters parameters;
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(
-          nlohmann::json({
-              {"type", "basic"},
-              {"from",
-               {
-                   {"key_code", "f1"},
-                   {"modifiers", {
-                                     {"mandatory", nlohmann::json::array()}, {"optional", {"any"}},
-                                 }},
-               }},
-          }),
-          parameters);
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-
-    krbn::event_queue input_event_queue;
-    krbn::event_queue output_event_queue;
-
-    krbn::manipulator::manipulator_managers_connector connector;
-    connector.emplace_back_connection(manipulator_manager,
-                                      input_event_queue,
-                                      output_event_queue);
-    // ----------------------------------------
-    // event_queue
-
-    uint64_t time_stamp = 0;
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, escape_event, key_down, escape_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, spacebar_event, key_up, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, escape_event, key_up, escape_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, left_shift_event, key_down, left_shift_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, left_shift_event, key_up, left_shift_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, right_shift_event, key_down, right_shift_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, tab_event, key_down, tab_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, f1_event, key_down, f1_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, f1_event, key_up, f1_event);
-    ENQUEUE_EVENT(input_event_queue, 1, time_stamp += 100, tab_event, key_up, tab_event);
-
-    // ----------------------------------------
-    // test
-
-    connector.manipulate();
-
-    std::vector<krbn::event_queue::queued_event> expected;
-    time_stamp = 0;
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, tab_event, key_down, spacebar_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, left_shift_event, key_down, escape_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, tab_event, key_up, spacebar_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, left_shift_event, key_up, escape_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, tab_event, key_down, left_shift_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, tab_event, key_up, left_shift_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, right_shift_event, key_down, right_shift_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, spacebar_event, key_down, spacebar_event);
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, a_event, key_down, tab_event);
-    time_stamp += 100;
-    time_stamp += 100;
-    PUSH_BACK_QUEUED_EVENT(expected, 1, time_stamp += 100, a_event, key_up, tab_event);
-
-    REQUIRE(input_event_queue.get_events().empty());
-    REQUIRE(output_event_queue.get_events() == expected);
-  }
-
-  {
-    // ----------------------------------------
-    // manipulator_manager (key_up)
-
-    krbn::manipulator::manipulator_manager manipulator_manager;
-    {
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::spacebar, {}, {}),
-                                                                             to_event_definition(krbn::key_code::tab, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-
-    krbn::event_queue input_event_queue;
-    krbn::event_queue output_event_queue;
-
-    krbn::manipulator::manipulator_managers_connector connector;
-    connector.emplace_back_connection(manipulator_manager,
-                                      input_event_queue,
-                                      output_event_queue);
-
-    // ----------------------------------------
-    // event_queue
-
-    ENQUEUE_EVENT(input_event_queue, 1, 100, spacebar_event, key_up, spacebar_event);
-
-    // ----------------------------------------
-    // test
-
-    connector.manipulate();
-
-    std::vector<krbn::event_queue::queued_event> expected;
-    PUSH_BACK_QUEUED_EVENT(expected, 1, 100, spacebar_event, key_up, spacebar_event);
-
-    REQUIRE(input_event_queue.get_events().empty());
-    REQUIRE(output_event_queue.get_events() == expected);
-  }
-
-  {
-    // ----------------------------------------
-    // manipulator_manager (handle_device_ungrabbed_event)
-
-    krbn::manipulator::manipulator_manager manipulator_manager1;
-    {
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::spacebar, {}, {}),
-                                                                             to_event_definition(krbn::key_code::tab, {}));
-      manipulator_manager1.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-
-    krbn::manipulator::manipulator_manager manipulator_manager2;
-    {
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::tab, {}, {}),
-                                                                             to_event_definition(krbn::key_code::escape, {}));
-      manipulator_manager2.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-    }
-
-    krbn::event_queue input_event_queue;
-    krbn::event_queue middle_event_queue;
-    krbn::event_queue output_event_queue;
-
-    krbn::manipulator::manipulator_managers_connector connector;
-    connector.emplace_back_connection(manipulator_manager1,
-                                      input_event_queue,
-                                      middle_event_queue);
-    connector.emplace_back_connection(manipulator_manager2,
-                                      output_event_queue);
-
-    // ----------------------------------------
-    // event_queue
-
-    ENQUEUE_EVENT(input_event_queue, 1, 100, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 2, 200, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 300, spacebar_event, key_up, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 400, device_ungrabbed_event, key_down, device_ungrabbed_event);
-
-    // ----------------------------------------
-    // test
-
-    // device_ungrabbed for device_id 1
-
-    connector.manipulate();
-
-    {
-      std::vector<krbn::event_queue::queued_event> expected;
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 100, escape_event, key_down, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 2, 200, escape_event, key_down, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 300, escape_event, key_up, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 400, device_ungrabbed_event, key_down, device_ungrabbed_event);
-
-      REQUIRE(input_event_queue.get_events().empty());
-      REQUIRE(output_event_queue.get_events() == expected);
-    }
-
-    output_event_queue.clear_events();
-
-    ENQUEUE_EVENT(input_event_queue, 2, 600, spacebar_event, key_up, spacebar_event);
-
-    connector.manipulate();
-
-    {
-      std::vector<krbn::event_queue::queued_event> expected;
-      PUSH_BACK_QUEUED_EVENT(expected, 2, 600, escape_event, key_up, spacebar_event);
-
-      REQUIRE(input_event_queue.get_events().empty());
-      REQUIRE(output_event_queue.get_events() == expected);
-    }
-
-    output_event_queue.clear_events();
-
-    // device_ungrabbed for device_id 2
-
-    ENQUEUE_EVENT(input_event_queue, 1, 100, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 2, 200, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 300, spacebar_event, key_up, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 2, 400, device_ungrabbed_event, key_down, device_ungrabbed_event);
-
-    connector.manipulate();
-
-    {
-      std::vector<krbn::event_queue::queued_event> expected;
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 100, escape_event, key_down, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 2, 200, escape_event, key_down, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 300, escape_event, key_up, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 2, 400, device_ungrabbed_event, key_down, device_ungrabbed_event);
-
-      REQUIRE(input_event_queue.get_events().empty());
-      REQUIRE(output_event_queue.get_events() == expected);
-    }
-
-    output_event_queue.clear_events();
-
-    ENQUEUE_EVENT(input_event_queue, 2, 600, spacebar_event, key_up, spacebar_event);
-
-    connector.manipulate();
-
-    {
-      std::vector<krbn::event_queue::queued_event> expected;
-      PUSH_BACK_QUEUED_EVENT(expected, 2, 600, spacebar_event, key_up, spacebar_event);
-
-      REQUIRE(input_event_queue.get_events().empty());
-      REQUIRE(output_event_queue.get_events() == expected);
-    }
-
-    // device_ungrabbed for device_id 3
-
-    output_event_queue.clear_events();
-
-    ENQUEUE_EVENT(input_event_queue, 3, 100, device_ungrabbed_event, key_down, device_ungrabbed_event);
-
-    connector.manipulate();
-
-    {
-      std::vector<krbn::event_queue::queued_event> expected;
-      PUSH_BACK_QUEUED_EVENT(expected, 3, 100, device_ungrabbed_event, key_down, device_ungrabbed_event);
-
-      REQUIRE(input_event_queue.get_events().empty());
-      REQUIRE(output_event_queue.get_events() == expected);
-    }
-  }
-
-  {
-    // ----------------------------------------
-    // manipulator_manager (invalidate)
-
-    krbn::manipulator::manipulator_manager manipulator_manager;
-    {
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::spacebar, {}, {}),
-                                                                             to_event_definition(krbn::key_code::tab, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-
-      REQUIRE(manipulator_manager.get_manipulators_size() == 1);
-    }
-    {
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::tab, {}, {}),
-                                                                             to_event_definition(krbn::key_code::escape, {}));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-
-      REQUIRE(manipulator_manager.get_manipulators_size() == 2);
-    }
-
-    krbn::event_queue input_event_queue;
-    krbn::event_queue output_event_queue;
-
-    krbn::manipulator::manipulator_managers_connector connector;
-    connector.emplace_back_connection(manipulator_manager,
-                                      input_event_queue,
-                                      output_event_queue);
-
-    // ----------------------------------------
-    // event_queue
-
-    ENQUEUE_EVENT(input_event_queue, 1, 100, spacebar_event, key_down, spacebar_event);
-
-    // ----------------------------------------
-    // test
-
-    connector.manipulate();
-    connector.invalidate_manipulators();
-
-    {
-      std::vector<krbn::event_queue::queued_event> expected;
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 100, tab_event, key_down, spacebar_event);
-
-      REQUIRE(input_event_queue.get_events().empty());
-      REQUIRE(output_event_queue.get_events() == expected);
-    }
-
-    REQUIRE(manipulator_manager.get_manipulators_size() == 1);
-
-    // push key_up (A remaining manipulator will be removed in the next `manipulate`)
-
-    ENQUEUE_EVENT(input_event_queue, 1, 300, spacebar_event, key_up, spacebar_event);
-
-    connector.manipulate();
-
-    REQUIRE(manipulator_manager.get_manipulators_size() == 0);
-  }
-
-  {
-    // ----------------------------------------
-    // manipulator_manager (with modifiers)
-
-    krbn::manipulator::manipulator_manager manipulator_manager;
-    {
-      auto manipulator = std::make_shared<krbn::manipulator::details::basic>(from_event_definition(krbn::key_code::spacebar,
-                                                                                                   {
-                                                                                                       event_definition::modifier::fn,
-                                                                                                   },
-                                                                                                   {
-                                                                                                       event_definition::modifier::any,
-                                                                                                   }),
-                                                                             to_event_definition(krbn::key_code::tab,
-                                                                                                 {
-                                                                                                     event_definition::modifier::fn,
-                                                                                                 }));
-      manipulator_manager.push_back_manipulator(std::shared_ptr<krbn::manipulator::details::base>(manipulator));
-
-      REQUIRE(manipulator_manager.get_manipulators_size() == 1);
-    }
-
-    krbn::event_queue input_event_queue;
-    krbn::event_queue output_event_queue;
-
-    krbn::manipulator::manipulator_managers_connector connector;
-    connector.emplace_back_connection(manipulator_manager,
-                                      input_event_queue,
-                                      output_event_queue);
-
-    // ----------------------------------------
-    // event_queue
-
-    ENQUEUE_EVENT(input_event_queue, 1, 100, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 200, spacebar_event, key_up, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 300, fn_event, key_down, fn_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 400, spacebar_event, key_down, spacebar_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 500, fn_event, key_up, fn_event);
-    ENQUEUE_EVENT(input_event_queue, 1, 600, spacebar_event, key_up, spacebar_event);
-
-    // ----------------------------------------
-    // test
-
-    connector.manipulate();
-
-    {
-      std::vector<krbn::event_queue::queued_event> expected;
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 100, spacebar_event, key_down, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 200, spacebar_event, key_up, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 300, fn_event, key_down, fn_event);
-      PUSH_BACK_LAZY_QUEUED_EVENT(expected, 1, 400, fn_event, key_up, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 401, tab_event, key_down, spacebar_event);
-      PUSH_BACK_LAZY_QUEUED_EVENT(expected, 1, 402, fn_event, key_down, spacebar_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 502, fn_event, key_up, fn_event);
-      PUSH_BACK_QUEUED_EVENT(expected, 1, 602, tab_event, key_up, spacebar_event);
-    }
-  }
+  REQUIRE(!connector.min_input_event_time_stamp());
+
+  // ----------------------------------------
+
+  event_queues[2]->emplace_back_event(krbn::device_id(1),
+                                      krbn::event_queue::queued_event::event_time_stamp(5000),
+                                      krbn::event_queue::queued_event::event(krbn::key_code::a),
+                                      krbn::event_type::key_down,
+                                      krbn::event_queue::queued_event::event(krbn::key_code::a));
+
+  REQUIRE(connector.min_input_event_time_stamp() == 5000ull);
+
+  // ----------------------------------------
+
+  event_queues[0]->emplace_back_event(krbn::device_id(1),
+                                      krbn::event_queue::queued_event::event_time_stamp(4000),
+                                      krbn::event_queue::queued_event::event(krbn::key_code::a),
+                                      krbn::event_type::key_down,
+                                      krbn::event_queue::queued_event::event(krbn::key_code::a));
+
+  REQUIRE(connector.min_input_event_time_stamp() == 4000ull);
+
+  // ----------------------------------------
+  // min_input_event_time_stamp uses only the front entry.
+
+  event_queues[3]->emplace_back_event(krbn::device_id(1),
+                                      krbn::event_queue::queued_event::event_time_stamp(3000),
+                                      krbn::event_queue::queued_event::event(krbn::key_code::a),
+                                      krbn::event_type::key_down,
+                                      krbn::event_queue::queued_event::event(krbn::key_code::a));
+  event_queues[0]->emplace_back_event(krbn::device_id(1),
+                                      krbn::event_queue::queued_event::event_time_stamp(2000),
+                                      krbn::event_queue::queued_event::event(krbn::key_code::a),
+                                      krbn::event_type::key_down,
+                                      krbn::event_queue::queued_event::event(krbn::key_code::a));
+
+  REQUIRE(connector.min_input_event_time_stamp() == 3000ull);
+}
+
+TEST_CASE("manipulator_timer") {
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries().empty());
+
+  std::vector<krbn::manipulator::manipulator_timer::timer_id> timer_ids;
+  timer_ids.push_back(krbn::manipulator::manipulator_timer::get_instance().add_entry(1234));
+  timer_ids.push_back(krbn::manipulator::manipulator_timer::get_instance().add_entry(1234));
+  timer_ids.push_back(krbn::manipulator::manipulator_timer::get_instance().add_entry(5678));
+  timer_ids.push_back(krbn::manipulator::manipulator_timer::get_instance().add_entry(5678));
+  timer_ids.push_back(krbn::manipulator::manipulator_timer::get_instance().add_entry(2345));
+  timer_ids.push_back(krbn::manipulator::manipulator_timer::get_instance().add_entry(2345));
+
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries().size() == 6);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[0].get_when() == 1234);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[1].get_when() == 1234);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[2].get_when() == 2345);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[3].get_when() == 2345);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[4].get_when() == 5678);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[5].get_when() == 5678);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[0].get_timer_id() == timer_ids[0]);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[1].get_timer_id() == timer_ids[1]);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[2].get_timer_id() == timer_ids[4]);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[3].get_timer_id() == timer_ids[5]);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[4].get_timer_id() == timer_ids[2]);
+  REQUIRE(krbn::manipulator::manipulator_timer::get_instance().get_entries()[5].get_timer_id() == timer_ids[3]);
 }
 
 TEST_CASE("needs_virtual_hid_pointing") {
@@ -553,6 +180,7 @@ TEST_CASE("needs_virtual_hid_pointing") {
            std::string("json/needs_virtual_hid_pointing_test2.json"),
            std::string("json/needs_virtual_hid_pointing_test3.json"),
            std::string("json/needs_virtual_hid_pointing_test4.json"),
+           std::string("json/needs_virtual_hid_pointing_test5.json"),
        }) {
     std::ifstream json_file(file_name);
     auto json = nlohmann::json::parse(json_file);
@@ -568,13 +196,9 @@ TEST_CASE("needs_virtual_hid_pointing") {
     }
     if (file_name == "json/needs_virtual_hid_pointing_test2.json" ||
         file_name == "json/needs_virtual_hid_pointing_test3.json" ||
-        file_name == "json/needs_virtual_hid_pointing_test4.json") {
+        file_name == "json/needs_virtual_hid_pointing_test4.json" ||
+        file_name == "json/needs_virtual_hid_pointing_test5.json") {
       REQUIRE(manager.needs_virtual_hid_pointing());
     }
   }
-}
-
-int main(int argc, char* const argv[]) {
-  krbn::thread_utility::register_main_thread();
-  return Catch::Session().run(argc, argv);
 }
