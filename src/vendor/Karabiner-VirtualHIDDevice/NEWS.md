@@ -1,3 +1,13 @@
+# Version 6.8.0
+
+* The kext binary has been built on macOS 10.12 in order to avoid kextload issue on macOS 10.12.
+
+
+# Version 6.7.0
+
+* Report Count of virtual keyboard has been increased. (6 -> 32)
+
+
 # Version 6.6.0
 
 * `pqrs::karabiner_virtual_hid_device::properties::keyboard_initialization::caps_lock_delay_milliseconds` has been removed.
@@ -93,7 +103,7 @@
 # Version 4.2.0
 
 * Fixed issue:
-  * `update.sh` fails to copy kext when the kext file is not in /Library/Extensions and kext is already loaded.
+    * `update.sh` fails to copy kext when the kext file is not in /Library/Extensions and kext is already loaded.
 
 
 # Version 4.1.0

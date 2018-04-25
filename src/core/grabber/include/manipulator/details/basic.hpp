@@ -24,8 +24,15 @@ public:
         strict_inverse,
       };
 
-      simultaneous_options(void) : key_down_order_(key_order::insensitive),
-                                   key_up_order_(key_order::insensitive) {
+      enum class key_up_when {
+        any,
+        all,
+      };
+
+      simultaneous_options(void) : detect_key_down_uninterruptedly_(false),
+                                   key_down_order_(key_order::insensitive),
+                                   key_up_order_(key_order::insensitive),
+                                   key_up_when_(key_up_when::any) {
       }
 
       void handle_json(const nlohmann::json& json) {
@@ -33,6 +40,17 @@ public:
           // it.key() is always std::string.
           const auto& key = it.key();
           const auto& value = it.value();
+
+          if (key == "detect_key_down_uninterruptedly") {
+            if (!value.is_boolean()) {
+              logger::get_logger().error("complex_modifications json error: `detect_key_down_uninterruptedly` should be boolean: {0}", json.dump());
+              continue;
+            }
+
+            detect_key_down_uninterruptedly_ = value;
+
+            continue;
+          }
 
           if (key == "key_down_order") {
             if (!value.is_string()) {
@@ -56,6 +74,17 @@ public:
             continue;
           }
 
+          if (key == "key_up_when") {
+            if (!value.is_string()) {
+              logger::get_logger().error("complex_modifications json error: `key_up_when` should be string: {0}", json.dump());
+              continue;
+            }
+
+            key_up_when_ = value;
+
+            continue;
+          }
+
           if (key == "to_after_key_up") {
             if (!value.is_array()) {
               logger::get_logger().error("complex_modifications json error: `to_after_key_up` should be array: {0}", json.dump());
@@ -73,6 +102,10 @@ public:
         }
       }
 
+      bool get_detect_key_down_uninterruptedly(void) const {
+        return detect_key_down_uninterruptedly_;
+      }
+
       key_order get_key_down_order(void) const {
         return key_down_order_;
       }
@@ -81,13 +114,19 @@ public:
         return key_up_order_;
       }
 
+      key_up_when get_key_up_when(void) const {
+        return key_up_when_;
+      }
+
       const std::vector<to_event_definition>& get_to_after_key_up(void) const {
         return to_after_key_up_;
       }
 
     private:
+      bool detect_key_down_uninterruptedly_;
       key_order key_down_order_;
       key_order key_up_order_;
+      key_up_when key_up_when_;
       std::vector<to_event_definition> to_after_key_up_;
     };
 
@@ -483,7 +522,6 @@ public:
                                const std::unordered_set<modifier_flag>& from_mandatory_modifiers,
                                uint64_t key_down_time_stamp) : from_events_(from_events),
                                                                from_mandatory_modifiers_(from_mandatory_modifiers),
-                                                               from_mandatory_modifiers_restored_(false),
                                                                key_down_time_stamp_(key_down_time_stamp),
                                                                alone_(true),
                                                                key_up_posted_(false) {
@@ -497,12 +535,8 @@ public:
       return from_mandatory_modifiers_;
     }
 
-    bool get_from_mandatory_modifiers_restored(void) const {
-      return from_mandatory_modifiers_restored_;
-    }
-
-    void set_from_mandatory_modifiers_restored(bool value) {
-      from_mandatory_modifiers_restored_ = value;
+    std::unordered_set<modifier_flag>& get_key_up_posted_from_mandatory_modifiers(void) {
+      return key_up_posted_from_mandatory_modifiers_;
     }
 
     uint64_t get_key_down_time_stamp(void) const {
@@ -563,7 +597,7 @@ public:
   private:
     std::unordered_set<from_event, from_event_hash> from_events_;
     std::unordered_set<modifier_flag> from_mandatory_modifiers_;
-    bool from_mandatory_modifiers_restored_;
+    std::unordered_set<modifier_flag> key_up_posted_from_mandatory_modifiers_;
     uint64_t key_down_time_stamp_;
     bool alone_;
     events_at_key_up events_at_key_up_;
@@ -1018,8 +1052,10 @@ public:
                       } else {
                         // Do not manipulate if another event arrived.
 
-                        if (!all_from_events_found(from_events)) {
-                          is_target = false;
+                        if (!from_.get_simultaneous_options().get_detect_key_down_uninterruptedly()) {
+                          if (!all_from_events_found(from_events)) {
+                            is_target = false;
+                          }
                         }
                       }
 
@@ -1208,54 +1244,90 @@ public:
 
               break;
 
-            case event_type::key_up:
-              if (!current_manipulated_original_event->get_key_up_posted()) {
-                current_manipulated_original_event->set_key_up_posted(true);
+            case event_type::key_up: {
+              bool skip = false;
 
-                // to_
+              switch (from_.get_simultaneous_options().get_key_up_when()) {
+                case from_event_definition::simultaneous_options::key_up_when::any:
+                  break;
 
-                post_events_at_key_up(front_input_event,
-                                      *current_manipulated_original_event,
-                                      time_stamp_delay,
-                                      *output_event_queue);
+                case from_event_definition::simultaneous_options::key_up_when::all:
+                  if (!current_manipulated_original_event->get_from_events().empty()) {
+                    skip = true;
+                  }
+                  break;
+              }
 
-                post_from_mandatory_modifiers_key_down(front_input_event,
-                                                       *current_manipulated_original_event,
-                                                       time_stamp_delay,
-                                                       *output_event_queue);
+              if (!skip) {
+                if (!current_manipulated_original_event->get_key_up_posted()) {
+                  current_manipulated_original_event->set_key_up_posted(true);
 
-                // to_after_key_up_
+                  // to_
 
-                if (!to_after_key_up_.empty()) {
-                  post_from_mandatory_modifiers_key_up(front_input_event,
-                                                       *current_manipulated_original_event,
-                                                       time_stamp_delay,
-                                                       *output_event_queue);
-
-                  post_extra_to_events(front_input_event,
-                                       to_after_key_up_,
-                                       time_stamp_delay,
-                                       *output_event_queue);
+                  post_events_at_key_up(front_input_event,
+                                        *current_manipulated_original_event,
+                                        time_stamp_delay,
+                                        *output_event_queue);
 
                   post_from_mandatory_modifiers_key_down(front_input_event,
                                                          *current_manipulated_original_event,
                                                          time_stamp_delay,
                                                          *output_event_queue);
-                }
 
-                // to_if_alone_
+                  // to_after_key_up_
 
-                if (!to_if_alone_.empty()) {
-                  uint64_t nanoseconds = time_utility::absolute_to_nano(front_input_event.get_event_time_stamp().get_time_stamp() - current_manipulated_original_event->get_key_down_time_stamp());
-                  if (current_manipulated_original_event->get_alone() &&
-                      nanoseconds < parameters_.get_basic_to_if_alone_timeout_milliseconds() * NSEC_PER_MSEC) {
+                  if (!to_after_key_up_.empty()) {
                     post_from_mandatory_modifiers_key_up(front_input_event,
                                                          *current_manipulated_original_event,
                                                          time_stamp_delay,
                                                          *output_event_queue);
 
                     post_extra_to_events(front_input_event,
-                                         to_if_alone_,
+                                         to_after_key_up_,
+                                         time_stamp_delay,
+                                         *output_event_queue);
+
+                    post_from_mandatory_modifiers_key_down(front_input_event,
+                                                           *current_manipulated_original_event,
+                                                           time_stamp_delay,
+                                                           *output_event_queue);
+                  }
+
+                  // to_if_alone_
+
+                  if (!to_if_alone_.empty()) {
+                    uint64_t nanoseconds = time_utility::absolute_to_nano(front_input_event.get_event_time_stamp().get_time_stamp() - current_manipulated_original_event->get_key_down_time_stamp());
+                    if (current_manipulated_original_event->get_alone() &&
+                        nanoseconds < parameters_.get_basic_to_if_alone_timeout_milliseconds() * NSEC_PER_MSEC) {
+                      post_from_mandatory_modifiers_key_up(front_input_event,
+                                                           *current_manipulated_original_event,
+                                                           time_stamp_delay,
+                                                           *output_event_queue);
+
+                      post_extra_to_events(front_input_event,
+                                           to_if_alone_,
+                                           time_stamp_delay,
+                                           *output_event_queue);
+
+                      post_from_mandatory_modifiers_key_down(front_input_event,
+                                                             *current_manipulated_original_event,
+                                                             time_stamp_delay,
+                                                             *output_event_queue);
+                    }
+                  }
+                }
+
+                // simultaneous_options.to_after_key_up_
+
+                if (!from_.get_simultaneous_options().get_to_after_key_up().empty()) {
+                  if (current_manipulated_original_event->get_from_events().empty()) {
+                    post_from_mandatory_modifiers_key_up(front_input_event,
+                                                         *current_manipulated_original_event,
+                                                         time_stamp_delay,
+                                                         *output_event_queue);
+
+                    post_extra_to_events(front_input_event,
+                                         from_.get_simultaneous_options().get_to_after_key_up(),
                                          time_stamp_delay,
                                          *output_event_queue);
 
@@ -1267,28 +1339,8 @@ public:
                 }
               }
 
-              // simultaneous_options.to_after_key_up_
-
-              if (!from_.get_simultaneous_options().get_to_after_key_up().empty()) {
-                if (current_manipulated_original_event->get_from_events().empty()) {
-                  post_from_mandatory_modifiers_key_up(front_input_event,
-                                                       *current_manipulated_original_event,
-                                                       time_stamp_delay,
-                                                       *output_event_queue);
-
-                  post_extra_to_events(front_input_event,
-                                       from_.get_simultaneous_options().get_to_after_key_up(),
-                                       time_stamp_delay,
-                                       *output_event_queue);
-
-                  post_from_mandatory_modifiers_key_down(front_input_event,
-                                                         *current_manipulated_original_event,
-                                                         time_stamp_delay,
-                                                         *output_event_queue);
-                }
-              }
-
               break;
+            }
 
             case event_type::single:
               break;
@@ -1419,28 +1471,80 @@ public:
                                             manipulated_original_event& current_manipulated_original_event,
                                             uint64_t& time_stamp_delay,
                                             event_queue& output_event_queue) const {
+    // ----------------------------------------
+    // Make target modifiers
+
+    std::unordered_set<modifier_flag> modifiers;
+
+    for (const auto& m : current_manipulated_original_event.get_from_mandatory_modifiers()) {
+      auto& key_up_posted_from_mandatory_modifiers = current_manipulated_original_event.get_key_up_posted_from_mandatory_modifiers();
+
+      if (key_up_posted_from_mandatory_modifiers.find(m) != std::end(key_up_posted_from_mandatory_modifiers)) {
+        continue;
+      }
+
+      // All from_mandatory_modifiers are usually pressed when `post_from_mandatory_modifiers_key_up` is called.
+      // However, there are some exceptional cases.
+      //
+      // Example:
+      //   - from:            left_shift+f2
+      //   - to:              left_shift+f3
+      //   - to_after_key_up: left_shift+tab
+      //
+      //   1. left_shift key_down
+      //   2. f2 key_down
+      //   3. left_shift key_up
+      //   4. f2 key_up
+      //
+      //   to_after_key_up is called at 4.
+      //   to_after_key_up calls `post_from_mandatory_modifiers_key_up` but `left_shift` is not pressed.
+      //
+      // We should not post key_up event in this case.
+
+      if (!output_event_queue.get_modifier_flag_manager().is_pressed(m)) {
+        continue;
+      }
+
+      modifiers.insert(m);
+      key_up_posted_from_mandatory_modifiers.insert(m);
+    }
+
+    // ----------------------------------------
+
     post_lazy_modifier_key_events(front_input_event,
-                                  current_manipulated_original_event.get_from_mandatory_modifiers(),
+                                  modifiers,
                                   event_type::key_up,
                                   time_stamp_delay,
                                   output_event_queue);
-
-    current_manipulated_original_event.set_from_mandatory_modifiers_restored(false);
   }
 
   void post_from_mandatory_modifiers_key_down(const event_queue::queued_event& front_input_event,
                                               manipulated_original_event& current_manipulated_original_event,
                                               uint64_t& time_stamp_delay,
                                               event_queue& output_event_queue) const {
-    if (!current_manipulated_original_event.get_from_mandatory_modifiers_restored()) {
-      current_manipulated_original_event.set_from_mandatory_modifiers_restored(true);
+    // ----------------------------------------
+    // Make target modifiers
 
-      post_lazy_modifier_key_events(front_input_event,
-                                    current_manipulated_original_event.get_from_mandatory_modifiers(),
-                                    event_type::key_down,
-                                    time_stamp_delay,
-                                    output_event_queue);
+    std::unordered_set<modifier_flag> modifiers;
+
+    for (const auto& m : current_manipulated_original_event.get_from_mandatory_modifiers()) {
+      auto& key_up_posted_from_mandatory_modifiers = current_manipulated_original_event.get_key_up_posted_from_mandatory_modifiers();
+
+      if (key_up_posted_from_mandatory_modifiers.find(m) == std::end(key_up_posted_from_mandatory_modifiers)) {
+        continue;
+      }
+
+      modifiers.insert(m);
+      key_up_posted_from_mandatory_modifiers.erase(m);
     }
+
+    // ----------------------------------------
+
+    post_lazy_modifier_key_events(front_input_event,
+                                  modifiers,
+                                  event_type::key_down,
+                                  time_stamp_delay,
+                                  output_event_queue);
   }
 
   void post_events_at_key_down(const event_queue::queued_event& front_input_event,
@@ -1495,6 +1599,8 @@ public:
         // Post key_up event
 
         if (it != std::end(to_events) - 1 || !it->get_repeat()) {
+          time_stamp_delay += it->get_hold_down_milliseconds() * NSEC_PER_MSEC;
+
           auto t = front_input_event.get_event_time_stamp();
           t.set_time_stamp(t.get_time_stamp() + time_stamp_delay++);
 
@@ -1641,6 +1747,8 @@ private:
         // Post key_up event
 
         {
+          time_stamp_delay += it->get_hold_down_milliseconds() * NSEC_PER_MSEC;
+
           auto t = front_input_event.get_event_time_stamp();
           t.set_time_stamp(t.get_time_stamp() + time_stamp_delay++);
 
@@ -1717,6 +1825,19 @@ inline void from_json(const nlohmann::json& json, basic::from_event_definition::
   } else {
     logger::get_logger().error("complex_modifications json error: Unknown simultaneous_options::key_order: {0}", json.dump());
     value = basic::from_event_definition::simultaneous_options::key_order::insensitive;
+  }
+}
+
+inline void from_json(const nlohmann::json& json, basic::from_event_definition::simultaneous_options::key_up_when& value) {
+  auto s = json.get<std::string>();
+
+  if (s == "any") {
+    value = basic::from_event_definition::simultaneous_options::key_up_when::any;
+  } else if (s == "all") {
+    value = basic::from_event_definition::simultaneous_options::key_up_when::all;
+  } else {
+    logger::get_logger().error("complex_modifications json error: Unknown simultaneous_options::key_up_when: {0}", json.dump());
+    value = basic::from_event_definition::simultaneous_options::key_up_when::any;
   }
 }
 } // namespace details

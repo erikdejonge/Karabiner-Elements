@@ -642,26 +642,34 @@ TEST_CASE("simultaneous_options") {
   {
     basic::from_event_definition event_definition(nlohmann::json::object({
         {"simultaneous_options", nlohmann::json::object({
+                                     {"detect_key_down_uninterruptedly", true},
                                      {"key_down_order", "strict"},
                                      {"key_up_order", "strict_inverse"},
+                                     {"key_up_when", "all"},
                                  })},
     }));
 
+    REQUIRE(event_definition.get_simultaneous_options().get_detect_key_down_uninterruptedly() == true);
     REQUIRE(event_definition.get_simultaneous_options().get_key_down_order() == basic::from_event_definition::simultaneous_options::key_order::strict);
     REQUIRE(event_definition.get_simultaneous_options().get_key_up_order() == basic::from_event_definition::simultaneous_options::key_order::strict_inverse);
+    REQUIRE(event_definition.get_simultaneous_options().get_key_up_when() == basic::from_event_definition::simultaneous_options::key_up_when::all);
   }
 
   {
     basic::from_event_definition event_definition(nlohmann::json::object({
         {"simultaneous_options", nlohmann::json::object({
+                                     {"detect_key_down_uninterruptedly", "unknown"},
                                      {"key_down_order", "unknown"},
                                      {"key_up_order", nlohmann::json::array()},
+                                     {"key_up_when", "unknown"},
                                      {"to_after_key_up", "unknown"},
                                  })},
     }));
 
+    REQUIRE(event_definition.get_simultaneous_options().get_detect_key_down_uninterruptedly() == false);
     REQUIRE(event_definition.get_simultaneous_options().get_key_down_order() == basic::from_event_definition::simultaneous_options::key_order::insensitive);
     REQUIRE(event_definition.get_simultaneous_options().get_key_up_order() == basic::from_event_definition::simultaneous_options::key_order::insensitive);
+    REQUIRE(event_definition.get_simultaneous_options().get_key_up_when() == basic::from_event_definition::simultaneous_options::key_up_when::any);
   }
 
   {
@@ -669,7 +677,9 @@ TEST_CASE("simultaneous_options") {
         {"simultaneous_options", "unknown"},
     }));
 
+    REQUIRE(event_definition.get_simultaneous_options().get_detect_key_down_uninterruptedly() == false);
     REQUIRE(event_definition.get_simultaneous_options().get_key_down_order() == basic::from_event_definition::simultaneous_options::key_order::insensitive);
     REQUIRE(event_definition.get_simultaneous_options().get_key_up_order() == basic::from_event_definition::simultaneous_options::key_order::insensitive);
+    REQUIRE(event_definition.get_simultaneous_options().get_key_up_when() == basic::from_event_definition::simultaneous_options::key_up_when::any);
   }
 }
