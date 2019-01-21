@@ -12,23 +12,23 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "time_stamp": 2000000
+            "time_stamp": 2
         },
         "valid": true
     },
     {
-        "device_id": 2,
+        "device_id": 0,
         "event": {
-            "type": "event_from_ignored_device"
+            "type": "pointing_device_event_from_event_tap"
         },
         "event_type": "key_down",
         "lazy": false,
         "original_event": {
-            "key_code": "spacebar",
-            "type": "key_code"
+            "pointing_button": "button1",
+            "type": "pointing_button"
         },
         "event_time_stamp": {
-            "time_stamp": 4000000
+            "time_stamp": 4
         },
         "valid": true
     },
@@ -45,7 +45,7 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "time_stamp": 6000000
+            "time_stamp": 6
         },
         "valid": true
     },
@@ -62,14 +62,14 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "time_stamp": 8000000
+            "time_stamp": 8
         },
         "valid": true
     },
     {
         "device_id": 2,
         "event": {
-            "type": "event_from_ignored_device"
+            "type": "pointing_device_event_from_event_tap"
         },
         "event_type": "single",
         "lazy": false,
@@ -80,7 +80,7 @@
             "type": "pointing_motion"
         },
         "event_time_stamp": {
-            "time_stamp": 10000000
+            "time_stamp": 10
         },
         "valid": true
     },
@@ -97,7 +97,7 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "time_stamp": 12000000
+            "time_stamp": 12
         },
         "valid": true
     },
@@ -114,30 +114,30 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "time_stamp": 14000000
+            "time_stamp": 14
         },
         "valid": true
     },
     {
         "device_id": 2,
         "event": {
-            "type": "event_from_ignored_device"
+            "type": "pointing_device_event_from_event_tap"
         },
         "event_type": "key_up",
         "lazy": false,
         "original_event": {
-            "key_code": "spacebar",
-            "type": "key_code"
+            "pointing_button": "button1",
+            "type": "pointing_button"
         },
         "event_time_stamp": {
-            "time_stamp": 16000000
+            "time_stamp": 16
         },
         "valid": true
     },
     {
         "device_id": 1,
         "event": {
-            "type": "event_from_ignored_device"
+            "type": "pointing_device_event_from_event_tap"
         },
         "event_type": "single",
         "lazy": false,
@@ -148,14 +148,14 @@
             "type": "pointing_motion"
         },
         "event_time_stamp": {
-            "time_stamp": 18000000
+            "time_stamp": 18
         },
         "valid": true
     },
     {
         "device_id": 1,
         "event": {
-            "type": "event_from_ignored_device"
+            "type": "pointing_device_event_from_event_tap"
         },
         "event_type": "single",
         "lazy": false,
@@ -166,7 +166,7 @@
             "type": "pointing_motion"
         },
         "event_time_stamp": {
-            "time_stamp": 20000000
+            "time_stamp": 20
         },
         "valid": true
     },
@@ -183,7 +183,7 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "time_stamp": 22000000
+            "time_stamp": 22
         },
         "valid": true
     }

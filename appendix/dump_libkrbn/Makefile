@@ -1,8 +1,10 @@
-all: main.o
+all:
 	$(MAKE) -C ../../src/lib/libkrbn
-	c++ -framework CoreFoundation -framework CoreServices -framework SystemConfiguration -framework IOKit -L../../src/lib/libkrbn/build/Release -lkrbn main.o
+	$(MAKE) build_make
 
-run: all
-	./a.out
+clean: clean_builds
 
-include ../Makefile.rules
+run:
+	./build/a.out
+
+include ../../src/Makefile.rules

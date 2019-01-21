@@ -1,18 +1,36 @@
+#include "dispatcher_utility.hpp"
+#include "monitor/console_user_id_monitor.hpp"
 #include "session.hpp"
-#include "thread_utility.hpp"
-#include <chrono>
 #include <iostream>
-#include <thread>
 
 int main(int argc, const char* argv[]) {
-  krbn::thread_utility::register_main_thread();
+  krbn::dispatcher_utility::initialize_dispatchers();
 
-  while (true) {
-    if (auto current_console_user_id = krbn::session::get_current_console_user_id()) {
-      std::cout << "current_console_user_id: " << *current_console_user_id << std::endl;
+  signal(SIGINT, [](int) {
+    CFRunLoopStop(CFRunLoopGetMain());
+  });
+
+  auto console_user_id_monitor = std::make_unique<krbn::console_user_id_monitor>();
+
+  console_user_id_monitor->console_user_id_changed.connect([](auto&& uid) {
+    if (uid) {
+      std::cout << "console_user_id_changed: " << *uid << std::endl;
+    } else {
+      std::cout << "console_user_id_changed: none" << std::endl;
     }
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+  });
+
+  for (int i = 0; i < 10; ++i) {
+    console_user_id_monitor->async_start();
+    console_user_id_monitor->async_stop();
   }
+  console_user_id_monitor->async_start();
+
+  CFRunLoopRun();
+
+  console_user_id_monitor = nullptr;
+
+  krbn::dispatcher_utility::terminate_dispatchers();
 
   return 0;
 }

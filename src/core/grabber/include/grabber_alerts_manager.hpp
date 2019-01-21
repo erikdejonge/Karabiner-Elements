@@ -1,9 +1,11 @@
 #pragma once
 
-#include "filesystem.hpp"
+// `krbn::grabber_alerts_manager` can be used safely in a multi-threaded environment.
+
 #include "json_utility.hpp"
 #include "logger.hpp"
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
+#include <pqrs/filesystem.hpp>
 #include <unordered_set>
 
 namespace krbn {
@@ -12,6 +14,11 @@ public:
   enum alert {
     system_policy_prevents_loading_kext,
   };
+
+  grabber_alerts_manager(const grabber_alerts_manager&) = delete;
+
+  grabber_alerts_manager(const std::string& output_json_file_path) : output_json_file_path_(output_json_file_path) {
+  }
 
   static std::string to_string(alert alert) {
 #define KRBN_ALERT_TO_STRING(ALERT)          \
@@ -27,77 +34,40 @@ public:
     return "";
   }
 
-  static void set_alert(alert alert, bool enabled) {
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> guard(mutex);
+  void set_alert(alert alert, bool enabled) {
+    {
+      std::lock_guard<std::mutex> lock(alerts_mutex_);
 
-    auto& manager = instance();
-
-    if (enabled) {
-      manager.alerts_.insert(alert);
-      logger::get_logger().warn("grabber_alert: {0}", to_string(alert));
-    } else {
-      manager.alerts_.erase(alert);
+      if (enabled) {
+        alerts_.insert(alert);
+        logger::get_logger().warn("grabber_alert: {0}", to_string(alert));
+      } else {
+        alerts_.erase(alert);
+      }
     }
 
-    manager.save_to_file_();
+    async_save_to_file();
   }
 
-  static void enable_json_output(const std::string& output_json_file_path) {
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> guard(mutex);
-
-    auto& manager = instance();
-
-    manager.output_json_file_path_ = output_json_file_path;
-  }
-
-  static void disable_json_output(void) {
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> guard(mutex);
-
-    auto& manager = instance();
-
-    manager.output_json_file_path_.clear();
-  }
-
-  static void save_to_file(void) {
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> guard(mutex);
-
-    auto& manager = instance();
-
-    manager.save_to_file_();
-  }
-
-private:
-  static grabber_alerts_manager& instance(void) {
-    static bool once = false;
-    static std::unique_ptr<grabber_alerts_manager> manager;
-
-    if (!once) {
-      once = true;
-      manager = std::make_unique<grabber_alerts_manager>();
+  void async_save_to_file(void) const {
+    if (!output_json_file_path_.empty()) {
+      json_utility::async_save_to_file(to_json(), output_json_file_path_, 0755, 0644);
     }
-
-    return *manager;
   }
 
   nlohmann::json to_json(void) const {
+    std::lock_guard<std::mutex> lock(alerts_mutex_);
+
     return nlohmann::json({
         {"alerts", alerts_},
     });
   }
 
-  void save_to_file_(void) {
-    if (!output_json_file_path_.empty()) {
-      filesystem::create_directory_with_intermediate_directories(filesystem::dirname(output_json_file_path_), 0755);
-      json_utility::save_to_file(to_json(), output_json_file_path_);
-    }
-  }
-
+private:
   std::string output_json_file_path_;
+
   std::unordered_set<alert> alerts_;
+  mutable std::mutex alerts_mutex_;
 };
 
 inline void to_json(nlohmann::json& json, const grabber_alerts_manager::alert& alert) {

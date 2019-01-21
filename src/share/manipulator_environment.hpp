@@ -2,14 +2,15 @@
 
 #include "boost_defs.hpp"
 
-#include "filesystem.hpp"
+#include "device_properties_manager.hpp"
 #include "json_utility.hpp"
 #include "logger.hpp"
 #include "types.hpp"
 #include <boost/functional/hash.hpp>
 #include <fstream>
 #include <iostream>
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
+#include <pqrs/filesystem.hpp>
 #include <string>
 
 namespace krbn {
@@ -107,13 +108,26 @@ public:
     output_json_file_path_.clear();
   }
 
+  const std::shared_ptr<device_properties> find_device_properties(device_id device_id) const {
+    return device_properties_manager_.find(device_id);
+  }
+
+  void insert_device_properties(device_id device_id,
+                                const device_properties& device_properties) {
+    device_properties_manager_.insert(device_id, device_properties);
+  }
+
+  void erase_device_properties(device_id device_id) {
+    device_properties_manager_.erase(device_id);
+  }
+
   const frontmost_application& get_frontmost_application(void) const {
     return frontmost_application_;
   }
 
   void set_frontmost_application(const frontmost_application& value) {
     frontmost_application_ = value;
-    save_to_file();
+    async_save_to_file();
   }
 
   const input_source_identifiers& get_input_source_identifiers(void) const {
@@ -122,7 +136,7 @@ public:
 
   void set_input_source_identifiers(const input_source_identifiers& value) {
     input_source_identifiers_ = value;
-    save_to_file();
+    async_save_to_file();
   }
 
   int get_variable(const std::string& name) const {
@@ -136,7 +150,7 @@ public:
   void set_variable(const std::string& name, int value) {
     // logger::get_logger().info("set_variable {0} {1}", name, value);
     variables_[name] = value;
-    save_to_file();
+    async_save_to_file();
   }
 
   const std::string& get_keyboard_type(void) const {
@@ -145,18 +159,18 @@ public:
 
   void set_keyboard_type(const std::string& value) {
     keyboard_type_ = value;
-    save_to_file();
+    async_save_to_file();
   }
 
 private:
-  void save_to_file(void) const {
+  void async_save_to_file(void) const {
     if (!output_json_file_path_.empty()) {
-      filesystem::create_directory_with_intermediate_directories(filesystem::dirname(output_json_file_path_), 0755);
-      json_utility::save_to_file(to_json(), output_json_file_path_);
+      json_utility::async_save_to_file(to_json(), output_json_file_path_, 0755, 0644);
     }
   }
 
   std::string output_json_file_path_;
+  device_properties_manager device_properties_manager_;
   frontmost_application frontmost_application_;
   input_source_identifiers input_source_identifiers_;
   std::unordered_map<std::string, int> variables_;

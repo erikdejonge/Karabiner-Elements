@@ -1,21 +1,10 @@
-#CONFIGURATION = Debug
-CONFIGURATION = Release
-
 all:
-	../../../scripts/setversion.sh
 	make -C ../lib/KarabinerKit
-	xcodebuild -alltargets -configuration $(CONFIGURATION) build
+	make build_xcode
 
-clean:
-	rm -rf build
-	rm -f *.xcodeproj/*.mode1
-	rm -f *.xcodeproj/*.mode1v3
-	rm -f *.xcodeproj/*.pbxuser
-	rm -rf *.xcodeproj/xcuserdata
-	rm -rf *.xcodeproj/project.xcworkspace/xcuserdata
-
-xcode:
-	open *.xcodeproj
+clean: clean_builds
 
 run:
-	./build/Release/Karabiner-Menu.app/Contents/MacOS/Karabiner-Menu
+	./build_xcode/build/Release/Karabiner-Menu.app/Contents/MacOS/Karabiner-Menu
+
+include ../../Makefile.rules

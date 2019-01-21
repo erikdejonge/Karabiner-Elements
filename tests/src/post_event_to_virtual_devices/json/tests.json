@@ -477,22 +477,6 @@
             "json/expected_post_event_to_virtual_devices_queue/from_modifiers_equal_to_modifiers_2.json"
     },
     {
-        "description": "event_from_ignored_device",
-        "rules": ["json/rules/complex_modifications.json"],
-        "input_event_queue":
-            "json/input_event_queue/event_from_ignored_device_1.json",
-        "expected_post_event_to_virtual_devices_queue":
-            "json/expected_post_event_to_virtual_devices_queue/event_from_ignored_device_1.json"
-    },
-    {
-        "description": "event_from_ignored_device and key repeat",
-        "rules": ["json/rules/complex_modifications.json"],
-        "input_event_queue":
-            "json/input_event_queue/event_from_ignored_device_2.json",
-        "expected_post_event_to_virtual_devices_queue":
-            "json/expected_post_event_to_virtual_devices_queue/event_from_ignored_device_2.json"
-    },
-    {
         "description": "pointing_device_event",
         "rules": ["json/rules/complex_modifications.json"],
         "input_event_queue":
@@ -855,5 +839,33 @@
         "input_event_queue": "json/input_event_queue/simultaneous_26.json",
         "expected_post_event_to_virtual_devices_queue":
             "json/expected_post_event_to_virtual_devices_queue/simultaneous_26.json"
+    },
+    {
+        "description": "halt_1 (to_if_held_down, halted)",
+        "rules": ["json/rules/halt.json"],
+        "input_event_queue": "json/input_event_queue/halt_1.json",
+        "expected_post_event_to_virtual_devices_queue":
+            "json/expected_post_event_to_virtual_devices_queue/halt_1.json"
+    },
+    {
+        "description": "halt_2 (to_if_held_down, not halted)",
+        "rules": ["json/rules/halt.json"],
+        "input_event_queue": "json/input_event_queue/halt_2.json",
+        "expected_post_event_to_virtual_devices_queue":
+            "json/expected_post_event_to_virtual_devices_queue/halt_2.json"
+    },
+    {
+        "description": "halt_3 (to_if_alone, halted)",
+        "rules": ["json/rules/halt.json"],
+        "input_event_queue": "json/input_event_queue/halt_3.json",
+        "expected_post_event_to_virtual_devices_queue":
+            "json/expected_post_event_to_virtual_devices_queue/halt_3.json"
+    },
+    {
+        "description": "halt_4 (to_if_alone, not halted)",
+        "rules": ["json/rules/halt.json"],
+        "input_event_queue": "json/input_event_queue/halt_4.json",
+        "expected_post_event_to_virtual_devices_queue":
+            "json/expected_post_event_to_virtual_devices_queue/halt_4.json"
     }
 ]

@@ -1,16 +1,6 @@
-include ../Makefile.common
+all: build_make
+	./build/karabiner_test
 
-CXXFLAGS += \
-	-I../../../src/share \
-	-I../../../src/vendor \
-	-I../../../src/core/grabber/include
+clean: clean_builds
 
-include ../Makefile.rules
-
-a.out: $(SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $(SOURCES) $(LDFLAGS)
-
-run:
-	rm -f tmp/*
-	@./a.out
-	for f in expected/*.json; do diff -u "tmp/`basename $$f`" "$$f" || exit 1; done
+include ../../../src/Makefile.rules

@@ -1,11 +1,9 @@
 #define CATCH_CONFIG_MAIN
-#include "../../vendor/catch/catch.hpp"
+#include <catch2/catch.hpp>
 
-#include "filesystem.hpp"
 #include "manipulator/details/basic.hpp"
 #include "manipulator/details/types.hpp"
-#include "thread_utility.hpp"
-#include <boost/optional/optional_io.hpp>
+#include <pqrs/filesystem.hpp>
 
 namespace {
 krbn::modifier_flag_manager::active_modifier_flag left_command_1(krbn::modifier_flag_manager::active_modifier_flag::type::increase,
@@ -37,10 +35,6 @@ void set_null_logger(void) {
   krbn::logger::set_logger(l);
 }
 } // namespace
-
-TEST_CASE("initialize") {
-  krbn::thread_utility::register_main_thread();
-}
 
 TEST_CASE("modifier_definition.test_modifier") {
   using krbn::manipulator::details::basic;
@@ -123,7 +117,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
     {
       krbn::modifier_flag_manager modifier_flag_manager;
       modifier_flag_manager.push_back_active_modifier_flag(left_shift_1);
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
   }
 
@@ -146,7 +140,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
     {
       krbn::modifier_flag_manager modifier_flag_manager;
       modifier_flag_manager.push_back_active_modifier_flag(left_shift_1);
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
   }
 
@@ -237,7 +231,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
 
     {
       krbn::modifier_flag_manager modifier_flag_manager;
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
     {
       krbn::modifier_flag_manager modifier_flag_manager;
@@ -258,7 +252,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
       krbn::modifier_flag_manager modifier_flag_manager;
       modifier_flag_manager.push_back_active_modifier_flag(left_control_1);
       modifier_flag_manager.push_back_active_modifier_flag(left_option_1);
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
   }
 
@@ -280,7 +274,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
 
     {
       krbn::modifier_flag_manager modifier_flag_manager;
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
     {
       krbn::modifier_flag_manager modifier_flag_manager;
@@ -317,7 +311,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
     {
       krbn::modifier_flag_manager modifier_flag_manager;
       modifier_flag_manager.push_back_active_modifier_flag(left_command_1);
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
     {
       krbn::modifier_flag_manager modifier_flag_manager;
@@ -330,7 +324,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
       krbn::modifier_flag_manager modifier_flag_manager;
       modifier_flag_manager.push_back_active_modifier_flag(left_shift_1);
       modifier_flag_manager.push_back_active_modifier_flag(right_shift_1);
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
   }
 
@@ -353,7 +347,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
     {
       krbn::modifier_flag_manager modifier_flag_manager;
       modifier_flag_manager.push_back_active_modifier_flag(left_command_1);
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
     {
       krbn::modifier_flag_manager modifier_flag_manager;
@@ -406,7 +400,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
     {
       krbn::modifier_flag_manager modifier_flag_manager;
       modifier_flag_manager.push_back_active_modifier_flag(left_command_1);
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
     {
       krbn::modifier_flag_manager modifier_flag_manager;
@@ -435,7 +429,7 @@ TEST_CASE("from_event_definition.test_modifiers") {
       modifier_flag_manager.push_back_active_modifier_flag(left_command_1);
       modifier_flag_manager.push_back_active_modifier_flag(left_shift_1);
       modifier_flag_manager.push_back_active_modifier_flag(right_shift_1);
-      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == boost::none);
+      REQUIRE(event_definition.test_modifiers(modifier_flag_manager) == std::nullopt);
     }
   }
 }
@@ -467,7 +461,7 @@ TEST_CASE("manipulator.details.basic::from_event_definition") {
     REQUIRE(event_definition.get_event_definitions().size() == 1);
     REQUIRE(event_definition.get_event_definitions().front().get_type() == krbn::manipulator::details::event_definition::type::key_code);
     REQUIRE(event_definition.get_event_definitions().front().get_key_code() == krbn::key_code::spacebar);
-    REQUIRE(event_definition.get_event_definitions().front().get_pointing_button() == boost::none);
+    REQUIRE(event_definition.get_event_definitions().front().get_pointing_button() == std::nullopt);
     REQUIRE(event_definition.get_mandatory_modifiers() == std::unordered_set<krbn::manipulator::details::modifier_definition::modifier>({
                                                               krbn::manipulator::details::modifier_definition::modifier::shift,
                                                               krbn::manipulator::details::modifier_definition::modifier::left_command,
@@ -475,7 +469,7 @@ TEST_CASE("manipulator.details.basic::from_event_definition") {
     REQUIRE(event_definition.get_optional_modifiers() == std::unordered_set<krbn::manipulator::details::modifier_definition::modifier>({
                                                              krbn::manipulator::details::modifier_definition::modifier::any,
                                                          }));
-    REQUIRE(event_definition.get_event_definitions().front().to_event() == krbn::event_queue::queued_event::event(krbn::key_code::spacebar));
+    REQUIRE(event_definition.get_event_definitions().front().to_event() == krbn::event_queue::event(krbn::key_code::spacebar));
   }
   {
     nlohmann::json json({
@@ -499,7 +493,7 @@ TEST_CASE("manipulator.details.basic::from_event_definition") {
     REQUIRE(event_definition.get_event_definitions().size() == 1);
     REQUIRE(event_definition.get_event_definitions().front().get_type() == krbn::manipulator::details::event_definition::type::key_code);
     REQUIRE(event_definition.get_event_definitions().front().get_key_code() == krbn::key_code::right_option);
-    REQUIRE(event_definition.get_event_definitions().front().get_pointing_button() == boost::none);
+    REQUIRE(event_definition.get_event_definitions().front().get_pointing_button() == std::nullopt);
     REQUIRE(event_definition.get_mandatory_modifiers() == std::unordered_set<krbn::manipulator::details::modifier_definition::modifier>({
                                                               krbn::manipulator::details::modifier_definition::modifier::shift,
                                                               krbn::manipulator::details::modifier_definition::modifier::left_command,
@@ -564,9 +558,9 @@ TEST_CASE("basic::from_event_definition.test_event") {
   {
     basic::from_event_definition d(nlohmann::json::object({}));
 
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::key_code::a), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::consumer_key_code::mute), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::pointing_button::button1), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::key_code::a), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::consumer_key_code::mute), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::pointing_button::button1), d));
   }
 
   {
@@ -574,11 +568,11 @@ TEST_CASE("basic::from_event_definition.test_event") {
         {"key_code", "spacebar"},
     }));
 
-    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::key_code::spacebar), d));
+    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::event(krbn::key_code::spacebar), d));
 
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::key_code::a), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::consumer_key_code::mute), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::pointing_button::button1), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::key_code::a), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::consumer_key_code::mute), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::pointing_button::button1), d));
   }
 
   {
@@ -586,11 +580,11 @@ TEST_CASE("basic::from_event_definition.test_event") {
         {"consumer_key_code", "rewind"},
     }));
 
-    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::consumer_key_code::rewind), d));
+    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::event(krbn::consumer_key_code::rewind), d));
 
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::key_code::a), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::consumer_key_code::mute), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::pointing_button::button1), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::key_code::a), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::consumer_key_code::mute), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::pointing_button::button1), d));
   }
 
   {
@@ -598,11 +592,11 @@ TEST_CASE("basic::from_event_definition.test_event") {
         {"pointing_button", "button2"},
     }));
 
-    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::pointing_button::button2), d));
+    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::event(krbn::pointing_button::button2), d));
 
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::key_code::a), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::consumer_key_code::mute), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::pointing_button::button1), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::key_code::a), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::consumer_key_code::mute), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::pointing_button::button1), d));
   }
 
   {
@@ -610,9 +604,9 @@ TEST_CASE("basic::from_event_definition.test_event") {
         {"any", "key_code"},
     }));
 
-    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::key_code::a), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::consumer_key_code::mute), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::pointing_button::button1), d));
+    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::event(krbn::key_code::a), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::consumer_key_code::mute), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::pointing_button::button1), d));
   }
 
   {
@@ -620,9 +614,9 @@ TEST_CASE("basic::from_event_definition.test_event") {
         {"any", "consumer_key_code"},
     }));
 
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::key_code::a), d));
-    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::consumer_key_code::mute), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::pointing_button::button1), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::key_code::a), d));
+    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::event(krbn::consumer_key_code::mute), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::pointing_button::button1), d));
   }
 
   {
@@ -630,9 +624,9 @@ TEST_CASE("basic::from_event_definition.test_event") {
         {"any", "pointing_button"},
     }));
 
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::key_code::a), d));
-    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::consumer_key_code::mute), d));
-    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::queued_event::event(krbn::pointing_button::button1), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::key_code::a), d));
+    REQUIRE(!basic::from_event_definition::test_event(krbn::event_queue::event(krbn::consumer_key_code::mute), d));
+    REQUIRE(basic::from_event_definition::test_event(krbn::event_queue::event(krbn::pointing_button::button1), d));
   }
 }
 

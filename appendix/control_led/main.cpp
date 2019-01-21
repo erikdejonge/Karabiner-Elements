@@ -1,141 +1,100 @@
-#include "boost_defs.hpp"
-
-#include "human_interface_device.hpp"
+#include "dispatcher_utility.hpp"
+#include "hid_keyboard_caps_lock_led_state_manager.hpp"
 #include "iokit_utility.hpp"
-#include "logger.hpp"
-#include <CoreFoundation/CoreFoundation.h>
-#include <IOKit/IOKitLib.h>
-#include <IOKit/hid/IOHIDDevice.h>
-#include <IOKit/hid/IOHIDElement.h>
-#include <IOKit/hid/IOHIDManager.h>
-#include <IOKit/hid/IOHIDQueue.h>
-#include <IOKit/hid/IOHIDValue.h>
-#include <IOKit/hidsystem/IOHIDShared.h>
-#include <IOKit/hidsystem/ev_keymap.h>
-#include <boost/bind.hpp>
-#include <iostream>
-#include <mach/mach_time.h>
+#include <csignal>
+#include <pqrs/osx/iokit_hid_manager.hpp>
 
 namespace {
-class control_led final {
+class control_led final : public pqrs::dispatcher::extra::dispatcher_client {
 public:
   control_led(const control_led&) = delete;
 
-  control_led(void) {
-    manager_ = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
-    if (!manager_) {
-      return;
-    }
+  control_led(krbn::led_state led_state) : dispatcher_client() {
+    std::vector<pqrs::cf::cf_ptr<CFDictionaryRef>> matching_dictionaries{
+        pqrs::osx::iokit_hid_manager::make_matching_dictionary(
+            pqrs::osx::iokit_hid_usage_page_generic_desktop,
+            pqrs::osx::iokit_hid_usage_generic_desktop_keyboard),
+    };
 
-    auto device_matching_dictionaries = krbn::iokit_utility::create_device_matching_dictionaries({
-        std::make_pair(krbn::hid_usage_page::generic_desktop, krbn::hid_usage::gd_keyboard),
+    hid_manager_ = std::make_unique<pqrs::osx::iokit_hid_manager>(weak_dispatcher_,
+                                                                  matching_dictionaries);
+
+    hid_manager_->device_matched.connect([this, led_state](auto&& registry_entry_id, auto&& device_ptr) {
+      if (device_ptr) {
+        auto device_id = krbn::make_device_id(registry_entry_id);
+        auto device_name = krbn::iokit_utility::make_device_name_for_log(device_id,
+                                                                         *device_ptr);
+        krbn::logger::get_logger().info("{0} is matched.", device_name);
+
+        pqrs::osx::iokit_return r = IOHIDDeviceOpen(*device_ptr, kIOHIDOptionsTypeNone);
+        if (!r) {
+          std::cerr << "IOHIDDeviceOpen:" << r << " " << device_name << std::endl;
+          return;
+        }
+
+        auto manager = std::make_shared<krbn::hid_keyboard_caps_lock_led_state_manager>(*device_ptr);
+        caps_lock_led_state_managers_[registry_entry_id] = manager;
+
+        manager->set_state(led_state);
+
+        manager->async_start();
+      }
     });
-    if (device_matching_dictionaries) {
-      IOHIDManagerSetDeviceMatchingMultiple(manager_, device_matching_dictionaries);
-      CFRelease(device_matching_dictionaries);
 
-      IOHIDManagerRegisterDeviceMatchingCallback(manager_, static_device_matching_callback, this);
-      IOHIDManagerRegisterDeviceRemovalCallback(manager_, static_device_removal_callback, this);
+    hid_manager_->device_terminated.connect([this](auto&& registry_entry_id) {
+      krbn::logger::get_logger().info("registry_entry_id:{0} is terminated.",
+                                      type_safe::get(registry_entry_id));
 
-      IOHIDManagerScheduleWithRunLoop(manager_, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
-    }
+      caps_lock_led_state_managers_.erase(registry_entry_id);
+    });
+
+    hid_manager_->async_start();
+  }
+
+  virtual ~control_led(void) {
+    detach_from_dispatcher([this] {
+      hid_manager_ = nullptr;
+    });
   }
 
 private:
-  static void static_device_matching_callback(void* _Nullable context, IOReturn result, void* _Nullable sender, IOHIDDeviceRef _Nonnull device) {
-    if (result != kIOReturnSuccess || !device) {
-      return;
-    }
-
-    auto self = static_cast<control_led*>(context);
-    if (!self) {
-      return;
-    }
-
-    self->device_matching_callback(device);
-  }
-
-  void device_matching_callback(IOHIDDeviceRef _Nonnull device) {
-    if (!device) {
-      return;
-    }
-
-    krbn::iokit_utility::log_matching_device(device);
-
-    hids_[device] = std::make_unique<krbn::human_interface_device>(device);
-    auto& dev = hids_[device];
-
-    auto kr = dev->open();
-    if (kr != kIOReturnSuccess) {
-      krbn::logger::get_logger().error("failed to dev->open(). {0}", kr);
-    }
-    dev->schedule();
-
-    if (auto caps_lock_led_state = dev->get_caps_lock_led_state()) {
-      switch (*caps_lock_led_state) {
-        case krbn::led_state::on:
-          krbn::logger::get_logger().info("caps_lock_led_state is on.");
-          break;
-        case krbn::led_state::off:
-          krbn::logger::get_logger().info("caps_lock_led_state is off.");
-          break;
-      }
-
-      if (caps_lock_led_state == krbn::led_state::on) {
-        dev->set_caps_lock_led_state(krbn::led_state::off);
-      } else {
-        dev->set_caps_lock_led_state(krbn::led_state::on);
-      }
-
-      krbn::logger::get_logger().info("set_caps_lock_led_state is called.");
-
-    } else {
-      krbn::logger::get_logger().info("failed to get caps_lock_led_state.");
-    }
-  }
-
-  static void static_device_removal_callback(void* _Nullable context, IOReturn result, void* _Nullable sender, IOHIDDeviceRef _Nonnull device) {
-    if (result != kIOReturnSuccess || !device) {
-      return;
-    }
-
-    auto self = static_cast<control_led*>(context);
-    if (!self) {
-      return;
-    }
-
-    self->device_removal_callback(device);
-  }
-
-  void device_removal_callback(IOHIDDeviceRef _Nonnull device) {
-    if (!device) {
-      return;
-    }
-
-    krbn::iokit_utility::log_removal_device(device);
-
-    auto it = hids_.find(device);
-    if (it != hids_.end()) {
-      auto& dev = it->second;
-      if (dev) {
-        hids_.erase(it);
-      }
-    }
-  }
-
-  IOHIDManagerRef _Nullable manager_;
-  std::unordered_map<IOHIDDeviceRef, std::unique_ptr<krbn::human_interface_device>> hids_;
+  std::unique_ptr<pqrs::osx::iokit_hid_manager> hid_manager_;
+  std::unordered_map<pqrs::osx::iokit_registry_entry_id, std::shared_ptr<krbn::hid_keyboard_caps_lock_led_state_manager>> caps_lock_led_state_managers_;
 };
+
+auto global_wait = pqrs::make_thread_wait();
 } // namespace
 
 int main(int argc, const char* argv[]) {
-  krbn::thread_utility::register_main_thread();
+  krbn::dispatcher_utility::initialize_dispatchers();
+
+  std::signal(SIGINT, [](int) {
+    global_wait->notify();
+  });
 
   if (getuid() != 0) {
     krbn::logger::get_logger().error("control_led requires root privilege.");
+  } else {
+    if (argc == 1) {
+      krbn::logger::get_logger().error("Usage: control_led on|off");
+      krbn::logger::get_logger().error("  Example: control_led on");
+      krbn::logger::get_logger().error("  Example: control_led off");
+    } else {
+      auto p = std::make_unique<control_led>(std::string(argv[1]) == "on" ? krbn::led_state::on : krbn::led_state::off);
+
+      // ------------------------------------------------------------
+
+      global_wait->wait_notice();
+
+      // ------------------------------------------------------------
+
+      p = nullptr;
+    }
   }
 
-  control_led d;
-  CFRunLoopRun();
+  krbn::dispatcher_utility::terminate_dispatchers();
+
+  std::cout << "finished" << std::endl;
+
   return 0;
 }

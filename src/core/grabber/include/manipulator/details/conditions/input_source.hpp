@@ -46,7 +46,7 @@ public:
   virtual ~input_source(void) {
   }
 
-  virtual bool is_fulfilled(const event_queue::queued_event& queued_event,
+  virtual bool is_fulfilled(const event_queue::entry& entry,
                             const manipulator_environment& manipulator_environment) const {
     if (cached_result_ && cached_result_->first == manipulator_environment.get_input_source_identifiers()) {
       return cached_result_->second;
@@ -87,7 +87,7 @@ private:
   type type_;
   std::vector<input_source_selector> input_source_selectors_;
 
-  mutable boost::optional<std::pair<input_source_identifiers, bool>> cached_result_;
+  mutable std::optional<std::pair<input_source_identifiers, bool>> cached_result_;
 };
 } // namespace conditions
 } // namespace details

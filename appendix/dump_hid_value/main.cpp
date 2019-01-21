@@ -1,220 +1,147 @@
-#include "boost_defs.hpp"
-
-#include "human_interface_device.hpp"
+#include "device_properties_manager.hpp"
+#include "dispatcher_utility.hpp"
+#include "event_queue.hpp"
 #include "iokit_utility.hpp"
-#include "logger.hpp"
-#include <CoreFoundation/CoreFoundation.h>
-#include <IOKit/IOKitLib.h>
-#include <IOKit/hid/IOHIDDevice.h>
-#include <IOKit/hid/IOHIDElement.h>
-#include <IOKit/hid/IOHIDManager.h>
-#include <IOKit/hid/IOHIDQueue.h>
-#include <IOKit/hid/IOHIDValue.h>
-#include <IOKit/hidsystem/IOHIDShared.h>
-#include <IOKit/hidsystem/ev_keymap.h>
-#include <boost/bind.hpp>
-#include <boost/optional/optional_io.hpp>
-#include <iostream>
-#include <mach/mach_time.h>
+#include <csignal>
+#include <pqrs/osx/iokit_hid_manager.hpp>
+#include <pqrs/osx/iokit_hid_queue_value_monitor.hpp>
 
 namespace {
-class dump_hid_value final {
+class dump_hid_value final : public pqrs::dispatcher::extra::dispatcher_client {
 public:
   dump_hid_value(const dump_hid_value&) = delete;
 
-  dump_hid_value(void) {
-    manager_ = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
-    if (!manager_) {
-      return;
-    }
+  dump_hid_value(void) : dispatcher_client() {
+    std::vector<pqrs::cf::cf_ptr<CFDictionaryRef>> matching_dictionaries{
+        pqrs::osx::iokit_hid_manager::make_matching_dictionary(
+            pqrs::osx::iokit_hid_usage_page_generic_desktop,
+            pqrs::osx::iokit_hid_usage_generic_desktop_keyboard),
 
-    auto device_matching_dictionaries = krbn::iokit_utility::create_device_matching_dictionaries({
-        std::make_pair(krbn::hid_usage_page::generic_desktop, krbn::hid_usage::gd_keyboard),
-        std::make_pair(krbn::hid_usage_page::generic_desktop, krbn::hid_usage::gd_mouse),
-        std::make_pair(krbn::hid_usage_page::generic_desktop, krbn::hid_usage::gd_pointer),
+        pqrs::osx::iokit_hid_manager::make_matching_dictionary(
+            pqrs::osx::iokit_hid_usage_page_generic_desktop,
+            pqrs::osx::iokit_hid_usage_generic_desktop_mouse),
+
+        pqrs::osx::iokit_hid_manager::make_matching_dictionary(
+            pqrs::osx::iokit_hid_usage_page_generic_desktop,
+            pqrs::osx::iokit_hid_usage_generic_desktop_pointer),
+    };
+
+    hid_manager_ = std::make_unique<pqrs::osx::iokit_hid_manager>(weak_dispatcher_,
+                                                                  matching_dictionaries);
+
+    hid_manager_->device_matched.connect([this](auto&& registry_entry_id, auto&& device_ptr) {
+      if (device_ptr) {
+        auto device_id = krbn::make_device_id(registry_entry_id);
+        krbn::logger::get_logger().info("{0} is matched.",
+                                        krbn::iokit_utility::make_device_name_for_log(device_id,
+                                                                                      *device_ptr));
+
+        auto device_properties = std::make_shared<krbn::device_properties>(device_id,
+                                                                           *device_ptr);
+        std::cout << std::setw(4) << device_properties->to_json() << std::endl;
+
+        auto hid_queue_value_monitor = std::make_shared<pqrs::osx::iokit_hid_queue_value_monitor>(weak_dispatcher_,
+                                                                                                  *device_ptr);
+        hid_queue_value_monitors_[device_id] = hid_queue_value_monitor;
+
+        hid_queue_value_monitor->values_arrived.connect([this, device_id](auto&& values_ptr) {
+          auto event_queue = krbn::event_queue::utility::make_queue(device_id,
+                                                                    krbn::iokit_utility::make_hid_values(values_ptr));
+          for (const auto& entry : event_queue->get_entries()) {
+            output_value(entry);
+          }
+        });
+
+        hid_queue_value_monitor->async_start(kIOHIDOptionsTypeNone,
+                                             std::chrono::milliseconds(3000));
+      }
     });
-    if (device_matching_dictionaries) {
-      IOHIDManagerSetDeviceMatchingMultiple(manager_, device_matching_dictionaries);
-      CFRelease(device_matching_dictionaries);
 
-      IOHIDManagerRegisterDeviceMatchingCallback(manager_, static_device_matching_callback, this);
-      IOHIDManagerRegisterDeviceRemovalCallback(manager_, static_device_removal_callback, this);
+    hid_manager_->device_terminated.connect([this](auto&& registry_entry_id) {
+      auto device_id = krbn::make_device_id(registry_entry_id);
 
-      IOHIDManagerScheduleWithRunLoop(manager_, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
-    }
+      krbn::logger::get_logger().info("device_id:{0} is terminated.", type_safe::get(device_id));
+
+      hid_queue_value_monitors_.erase(device_id);
+    });
+
+    hid_manager_->async_start();
+  }
+
+  virtual ~dump_hid_value(void) {
+    detach_from_dispatcher([this] {
+      hid_manager_ = nullptr;
+      hid_queue_value_monitors_.clear();
+    });
   }
 
 private:
-  static void static_device_matching_callback(void* _Nullable context, IOReturn result, void* _Nullable sender, IOHIDDeviceRef _Nonnull device) {
-    if (result != kIOReturnSuccess || !device) {
-      return;
-    }
+  void output_value(const krbn::event_queue::entry& entry) const {
+    std::cout << entry.get_event_time_stamp().get_time_stamp() << " ";
 
-    auto self = static_cast<dump_hid_value*>(context);
-    if (!self) {
-      return;
-    }
+    switch (entry.get_event().get_type()) {
+      case krbn::event_queue::event::type::key_code:
+        if (auto key_code = entry.get_event().get_key_code()) {
+          std::cout << "Key: " << std::dec << static_cast<uint32_t>(*key_code) << " "
+                    << entry.get_event_type()
+                    << std::endl;
+        }
+        break;
 
-    self->device_matching_callback(device);
-  }
+      case krbn::event_queue::event::type::consumer_key_code:
+        if (auto consumer_key_code = entry.get_event().get_consumer_key_code()) {
+          std::cout << "ConsumerKey: " << std::dec << static_cast<uint32_t>(*consumer_key_code) << " "
+                    << entry.get_event_type()
+                    << std::endl;
+        }
+        break;
 
-  void device_matching_callback(IOHIDDeviceRef _Nonnull device) {
-    if (!device) {
-      return;
-    }
+      case krbn::event_queue::event::type::pointing_button:
+        if (auto pointing_button = entry.get_event().get_pointing_button()) {
+          std::cout << "Button: " << std::dec << static_cast<uint32_t>(*pointing_button) << " "
+                    << entry.get_event_type()
+                    << std::endl;
+        }
+        break;
 
-    krbn::iokit_utility::log_matching_device(device);
+      case krbn::event_queue::event::type::pointing_motion:
+        if (auto pointing_motion = entry.get_event().get_pointing_motion()) {
+          std::cout << "pointing_motion: " << pointing_motion->to_json() << std::endl;
+        }
+        break;
 
-    hids_[device] = std::make_unique<krbn::human_interface_device>(device);
-    auto& dev = hids_[device];
-    dev->set_value_callback(boost::bind(&dump_hid_value::value_callback, this, _1, _2));
-    dev->observe();
-  }
-
-  static void static_device_removal_callback(void* _Nullable context, IOReturn result, void* _Nullable sender, IOHIDDeviceRef _Nonnull device) {
-    if (result != kIOReturnSuccess || !device) {
-      return;
-    }
-
-    auto self = static_cast<dump_hid_value*>(context);
-    if (!self) {
-      return;
-    }
-
-    self->device_removal_callback(device);
-  }
-
-  void device_removal_callback(IOHIDDeviceRef _Nonnull device) {
-    if (!device) {
-      return;
-    }
-
-    krbn::iokit_utility::log_removal_device(device);
-
-    auto it = hids_.find(device);
-    if (it != hids_.end()) {
-      auto& dev = it->second;
-      if (dev) {
-        hids_.erase(it);
-      }
+      default:
+        break;
     }
   }
 
-  void value_callback(krbn::human_interface_device& device,
-                      krbn::event_queue& event_queue) {
-    for (const auto& queued_event : event_queue.get_events()) {
-      switch (queued_event.get_event().get_type()) {
-        case krbn::event_queue::queued_event::event::type::none:
-          std::cout << "none" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::key_code:
-          if (auto key_code = queued_event.get_event().get_key_code()) {
-            std::cout << "Key: " << std::dec << static_cast<uint32_t>(*key_code) << " "
-                      << queued_event.get_event_type()
-                      << std::endl;
-          }
-          break;
-
-        case krbn::event_queue::queued_event::event::type::consumer_key_code:
-          if (auto consumer_key_code = queued_event.get_event().get_consumer_key_code()) {
-            std::cout << "ConsumerKey: " << std::dec << static_cast<uint32_t>(*consumer_key_code) << " "
-                      << queued_event.get_event_type()
-                      << std::endl;
-          }
-          break;
-
-        case krbn::event_queue::queued_event::event::type::pointing_button:
-          if (auto pointing_button = queued_event.get_event().get_pointing_button()) {
-            std::cout << "Button: " << std::dec << static_cast<uint32_t>(*pointing_button) << " "
-                      << queued_event.get_event_type()
-                      << std::endl;
-          }
-          break;
-
-        case krbn::event_queue::queued_event::event::type::pointing_motion:
-          if (auto pointing_motion = queued_event.get_event().get_pointing_motion()) {
-            std::cout << "pointing_motion: " << pointing_motion->to_json() << std::endl;
-          }
-          break;
-
-        case krbn::event_queue::queued_event::event::type::shell_command:
-          std::cout << "shell_command" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::select_input_source:
-          std::cout << "select_input_source" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::set_variable:
-          std::cout << "set_variable" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::mouse_key:
-          std::cout << "mouse_key" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::stop_keyboard_repeat:
-          std::cout << "stop_keyboard_repeat" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::device_keys_and_pointing_buttons_are_released:
-          std::cout << "device_keys_and_pointing_buttons_are_released for " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::device_ungrabbed:
-          std::cout << "device_ungrabbed for " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::caps_lock_state_changed:
-          if (auto integer_value = queued_event.get_event().get_integer_value()) {
-            std::cout << "caps_lock_state_changed " << *integer_value << std::endl;
-          }
-          break;
-
-        case krbn::event_queue::queued_event::event::type::event_from_ignored_device:
-          std::cout << "event_from_ignored_device from " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::pointing_device_event_from_event_tap:
-          std::cout << "pointing_device_event_from_event_tap from " << device.get_name_for_log() << " (" << device.get_device_id() << ")" << std::endl;
-          break;
-
-        case krbn::event_queue::queued_event::event::type::frontmost_application_changed:
-          if (auto frontmost_application = queued_event.get_event().get_frontmost_application()) {
-            std::cout << "frontmost_application_changed "
-                      << frontmost_application->get_bundle_identifier() << " "
-                      << frontmost_application->get_file_path() << std::endl;
-          }
-          break;
-
-        case krbn::event_queue::queued_event::event::type::input_source_changed:
-          if (auto input_source_identifiers = queued_event.get_event().get_input_source_identifiers()) {
-            std::cout << "input_source_changed " << input_source_identifiers << std::endl;
-          }
-          break;
-
-        case krbn::event_queue::queued_event::event::type::keyboard_type_changed:
-          if (auto keyboard_type = queued_event.get_event().get_keyboard_type()) {
-            std::cout << "keyboard_type_changed " << keyboard_type << std::endl;
-          }
-          break;
-      }
-    }
-
-    event_queue.clear_events();
-  }
-
-  IOHIDManagerRef _Nullable manager_;
-  std::unordered_map<IOHIDDeviceRef, std::unique_ptr<krbn::human_interface_device>> hids_;
-  krbn::event_queue event_queue_;
+  std::unique_ptr<pqrs::osx::iokit_hid_manager> hid_manager_;
+  std::unordered_map<krbn::device_id, std::shared_ptr<pqrs::osx::iokit_hid_queue_value_monitor>> hid_queue_value_monitors_;
 };
+
+auto global_wait = pqrs::make_thread_wait();
 } // namespace
 
 int main(int argc, const char* argv[]) {
-  krbn::thread_utility::register_main_thread();
+  krbn::dispatcher_utility::initialize_dispatchers();
 
-  dump_hid_value d;
-  CFRunLoopRun();
+  std::signal(SIGINT, [](int) {
+    global_wait->notify();
+  });
+
+  auto d = std::make_unique<dump_hid_value>();
+
+  // ------------------------------------------------------------
+
+  global_wait->wait_notice();
+
+  // ------------------------------------------------------------
+
+  d = nullptr;
+
+  krbn::dispatcher_utility::terminate_dispatchers();
+
+  std::cout << "finished" << std::endl;
+
   return 0;
 }

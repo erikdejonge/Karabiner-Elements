@@ -1,8 +1,7 @@
 #define CATCH_CONFIG_MAIN
-#include "../../vendor/catch/catch.hpp"
+#include <catch2/catch.hpp>
 
 #include "pointing_button_manager.hpp"
-#include "thread_utility.hpp"
 
 namespace {
 krbn::pointing_button_manager::active_pointing_button button1_1(krbn::pointing_button_manager::active_pointing_button::type::increase,
@@ -29,10 +28,6 @@ krbn::pointing_button_manager::active_pointing_button button20_1(krbn::pointing_
                                                                  krbn::pointing_button::button20,
                                                                  krbn::device_id(1));
 } // namespace
-
-TEST_CASE("initialize") {
-  krbn::thread_utility::register_main_thread();
-}
 
 TEST_CASE("pointing_button_manager") {
   {

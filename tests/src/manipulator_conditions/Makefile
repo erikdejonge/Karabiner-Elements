@@ -1,15 +1,6 @@
-include ../Makefile.common
+all: build_make
+	./build/karabiner_test
 
-CXXFLAGS += \
-	-I../../../src/share \
-	-I../../../src/vendor \
-	-I../../../src/core/grabber/include
+clean: clean_builds
 
-include ../Makefile.rules
-
-a.out: $(SOURCES)
-	$(CXX) $(CXXFLAGS) -o $@ $(SOURCES) $(LDFLAGS)
-
-run:
-	@./a.out
-	diff tmp/manipulator_environment.json expected/manipulator_environment.json
+include ../../../src/Makefile.rules

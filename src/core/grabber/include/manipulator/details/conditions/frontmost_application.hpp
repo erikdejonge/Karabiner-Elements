@@ -71,7 +71,7 @@ public:
   virtual ~frontmost_application(void) {
   }
 
-  virtual bool is_fulfilled(const event_queue::queued_event& queued_event,
+  virtual bool is_fulfilled(const event_queue::entry& entry,
                             const manipulator_environment& manipulator_environment) const {
     if (cached_result_ && cached_result_->first == manipulator_environment.get_frontmost_application()) {
       return cached_result_->second;
@@ -137,7 +137,7 @@ private:
   std::vector<std::regex> bundle_identifiers_;
   std::vector<std::regex> file_paths_;
 
-  mutable boost::optional<std::pair<manipulator_environment::frontmost_application, bool>> cached_result_;
+  mutable std::optional<std::pair<manipulator_environment::frontmost_application, bool>> cached_result_;
 };
 } // namespace conditions
 } // namespace details

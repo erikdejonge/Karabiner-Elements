@@ -1,23 +1,41 @@
+#include "console_user_server_client.hpp"
+#include "dispatcher_utility.hpp"
 #include "logger.hpp"
-#include "manipulator/details/post_event_to_virtual_devices.hpp"
-#include "thread_utility.hpp"
 #include "time_utility.hpp"
 #include "virtual_hid_device_client.hpp"
 
 int main(int argc, const char* argv[]) {
-  krbn::thread_utility::register_main_thread();
+  krbn::dispatcher_utility::initialize_dispatchers();
 
-  try {
-    krbn::console_user_server_client client(getuid());
-    //krbn::console_user_server_client client(201);
+  signal(SIGINT, [](int) {
+    CFRunLoopStop(CFRunLoopGetMain());
+  });
 
-    {
-      std::string shell_command = "open /Applications/Safari.app";
-      client.shell_command_execution(shell_command);
+  auto client = std::make_shared<krbn::console_user_server_client>();
+  std::weak_ptr<krbn::console_user_server_client> weak_client = client;
+
+  client->connected.connect([weak_client] {
+    std::string shell_command = "open /Applications/Safari.app";
+    if (auto c = weak_client.lock()) {
+      c->async_shell_command_execution(shell_command);
     }
-  } catch (std::exception& e) {
-    krbn::logger::get_logger().error(e.what());
-  }
+  });
+
+  client->connect_failed.connect([](auto&& error_code) {
+    krbn::logger::get_logger().error("Failed to connect");
+  });
+
+  client->async_start();
+
+  // ------------------------------------------------------------
+
+  CFRunLoopRun();
+
+  // ------------------------------------------------------------
+
+  client = nullptr;
+
+  krbn::dispatcher_utility::terminate_dispatchers();
 
   return 0;
 }

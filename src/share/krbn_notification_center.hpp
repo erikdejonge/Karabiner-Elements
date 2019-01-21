@@ -1,13 +1,20 @@
 #pragma once
 
-#include <boost/signals2.hpp>
+#include <nod/nod.hpp>
+#include <pqrs/dispatcher.hpp>
 
 namespace krbn {
 class krbn_notification_center final {
 public:
   class core final {
   public:
-    boost::signals2::signal<void(void)> input_event_arrived;
+    nod::signal<void(void)> input_event_arrived;
+
+    void enqueue_input_event_arrived(pqrs::dispatcher::extra::dispatcher_client& client) {
+      client.enqueue_to_dispatcher([this] {
+        input_event_arrived();
+      });
+    }
   };
 
   static core& get_instance(void) {

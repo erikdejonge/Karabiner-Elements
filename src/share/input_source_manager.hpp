@@ -1,10 +1,12 @@
 #pragma once
 
-#include "cf_utility.hpp"
 #include "input_source_utility.hpp"
 #include "logger.hpp"
 #include "types.hpp"
 #include <Carbon/Carbon.h>
+#include <pqrs/cf/array.hpp>
+#include <pqrs/cf/cf_ptr.hpp>
+#include <pqrs/cf/dictionary.hpp>
 
 namespace krbn {
 class input_source_manager final {
@@ -49,15 +51,6 @@ private:
 
     entry(TISInputSourceRef tis_input_source_ref) : input_source_identifiers_(tis_input_source_ref),
                                                     tis_input_source_ref_(tis_input_source_ref) {
-      if (tis_input_source_ref_) {
-        CFRetain(tis_input_source_ref_);
-      }
-    }
-
-    ~entry(void) {
-      if (tis_input_source_ref_) {
-        CFRelease(tis_input_source_ref_);
-      }
     }
 
     const input_source_identifiers& get_input_source_identifiers(void) const {
@@ -65,12 +58,12 @@ private:
     }
 
     TISInputSourceRef get_tis_input_source_ref(void) const {
-      return tis_input_source_ref_;
+      return *tis_input_source_ref_;
     }
 
   private:
     input_source_identifiers input_source_identifiers_;
-    TISInputSourceRef tis_input_source_ref_;
+    pqrs::cf::cf_ptr<TISInputSourceRef> tis_input_source_ref_;
   };
 
   static void static_enabled_input_sources_changed_callback(CFNotificationCenterRef center,
@@ -87,13 +80,13 @@ private:
   void enabled_input_sources_changed_callback(void) {
     entries_.clear();
 
-    if (auto properties = cf_utility::create_cfmutabledictionary()) {
-      CFDictionarySetValue(properties, kTISPropertyInputSourceIsSelectCapable, kCFBooleanTrue);
-      CFDictionarySetValue(properties, kTISPropertyInputSourceCategory, kTISCategoryKeyboardInputSource);
+    if (auto properties = pqrs::cf::make_cf_mutable_dictionary()) {
+      CFDictionarySetValue(*properties, kTISPropertyInputSourceIsSelectCapable, kCFBooleanTrue);
+      CFDictionarySetValue(*properties, kTISPropertyInputSourceCategory, kTISCategoryKeyboardInputSource);
 
-      if (auto input_sources = TISCreateInputSourceList(properties, false)) {
+      if (auto input_sources = TISCreateInputSourceList(*properties, false)) {
         for (CFIndex i = 0;; ++i) {
-          auto s = cf_utility::get_value<TISInputSourceRef>(input_sources, i);
+          auto s = pqrs::cf::get_cf_array_value<TISInputSourceRef>(input_sources, i);
           if (!s) {
             break;
           }
@@ -103,8 +96,6 @@ private:
 
         CFRelease(input_sources);
       }
-
-      CFRelease(properties);
     }
   }
 

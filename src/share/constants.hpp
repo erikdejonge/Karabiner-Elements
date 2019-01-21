@@ -16,6 +16,10 @@ public:
     return "/Library/Application Support/org.pqrs/tmp";
   }
 
+  static std::string get_pid_directory(void) {
+    return "/Library/Application Support/org.pqrs/tmp/pid";
+  }
+
   static const char* get_grabber_socket_file_path(void) {
     return "/Library/Application Support/org.pqrs/tmp/karabiner_grabber_receiver";
   }
@@ -118,6 +122,24 @@ public:
     return file_path;
   }
 
+  static const std::string& get_user_core_configuration_automatic_backups_directory(void) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> guard(mutex);
+
+    static bool once = false;
+    static std::string directory;
+
+    if (!once) {
+      once = true;
+      auto d = get_user_configuration_directory();
+      if (!d.empty()) {
+        directory = d + "/automatic_backups";
+      }
+    }
+
+    return directory;
+  }
+
   static const std::string& get_user_complex_modifications_assets_directory(void) {
     static std::mutex mutex;
     std::lock_guard<std::mutex> guard(mutex);
@@ -174,10 +196,6 @@ public:
 
   static const char* get_distributed_notification_observed_object(void) {
     return "org.pqrs.karabiner";
-  }
-
-  static const char* get_distributed_notification_grabber_is_launched(void) {
-    return "grabber_is_launched";
   }
 
   static const char* get_distributed_notification_console_user_server_is_disabled(void) {

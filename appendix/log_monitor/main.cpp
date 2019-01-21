@@ -1,31 +1,42 @@
 #include "boost_defs.hpp"
 
-#include "log_monitor.hpp"
-#include <Carbon/Carbon.h>
+#include "dispatcher_utility.hpp"
+#include "monitor/log_monitor.hpp"
 #include <iostream>
 
-namespace {
-void new_log_line_callback(const std::string& line) {
-  std::cout << line << std::endl;
-}
-} // namespace
-
 int main(int argc, const char* argv[]) {
-  krbn::thread_utility::register_main_thread();
+  krbn::dispatcher_utility::initialize_dispatchers();
+
+  signal(SIGINT, [](int) {
+    CFRunLoopStop(CFRunLoopGetMain());
+  });
 
   std::vector<std::string> targets = {
       "/var/log/karabiner/grabber.log",
   };
-  krbn::log_monitor monitor(targets, new_log_line_callback);
+  auto monitor = std::make_unique<krbn::log_monitor>(targets);
+
+  monitor->new_log_line_arrived.connect([](auto&& line) {
+    std::cout << line << std::endl;
+  });
 
 #if 1
-  for (const auto& it : monitor.get_initial_lines()) {
+  for (const auto& it : monitor->get_initial_lines()) {
     std::cout << it.second << std::endl;
   }
 #endif
 
-  monitor.start();
+  monitor->async_start();
+
+  // ------------------------------------------------------------
 
   CFRunLoopRun();
+
+  // ------------------------------------------------------------
+
+  monitor = nullptr;
+
+  krbn::dispatcher_utility::terminate_dispatchers();
+
   return 0;
 }

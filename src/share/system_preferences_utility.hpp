@@ -1,17 +1,15 @@
 #pragma once
 
-#include "boost_defs.hpp"
-
-#include "cf_utility.hpp"
 #include "types.hpp"
 #include <CoreFoundation/CoreFoundation.h>
-#include <boost/optional.hpp>
+#include <optional>
+#include <pqrs/cf/number.hpp>
 
 namespace krbn {
 class system_preferences_utility final {
 public:
-  static boost::optional<bool> get_bool_property(CFStringRef _Nonnull key, CFStringRef _Nonnull application_id) {
-    boost::optional<bool> value = boost::none;
+  static std::optional<bool> get_bool_property(CFStringRef _Nonnull key, CFStringRef _Nonnull application_id) {
+    std::optional<bool> value = std::nullopt;
     if (auto v = CFPreferencesCopyAppValue(key, application_id)) {
       if (CFBooleanGetTypeID() == CFGetTypeID(v)) {
         value = CFBooleanGetValue(static_cast<CFBooleanRef>(v));
@@ -21,8 +19,8 @@ public:
     return value;
   }
 
-  static boost::optional<float> get_float_property(CFStringRef _Nonnull key, CFStringRef _Nonnull application_id) {
-    boost::optional<float> value = boost::none;
+  static std::optional<float> get_float_property(CFStringRef _Nonnull key, CFStringRef _Nonnull application_id) {
+    std::optional<float> value = std::nullopt;
     if (auto v = CFPreferencesCopyAppValue(key, application_id)) {
       if (CFNumberGetTypeID() == CFGetTypeID(v)) {
         float vv;
@@ -69,14 +67,14 @@ public:
     if (auto value = copy_dictionary_property(CFSTR("keyboardtype"), CFSTR("com.apple.keyboardtype"))) {
       if (auto key = CFStringCreateWithCString(kCFAllocatorDefault,
                                                fmt::format("{0}-{1}-{2}",
-                                                           static_cast<uint16_t>(product_id),
-                                                           static_cast<uint16_t>(vendor_id),
+                                                           type_safe::get(product_id),
+                                                           type_safe::get(vendor_id),
                                                            country_code)
                                                    .c_str(),
                                                kCFStringEncodingUTF8)) {
         if (auto keyboard_type = CFDictionaryGetValue(value, key)) {
-          if (auto v = cf_utility::to_int64_t(keyboard_type)) {
-            return *v;
+          if (auto v = pqrs::cf::make_number<int64_t>(keyboard_type)) {
+            return static_cast<uint8_t>(*v);
           }
         }
 

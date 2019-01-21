@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Package build into a signed .dmg file
+set -u
 
-PATH="/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin"; export PATH
+# Package build into a signed .dmg file
 
 version=$(cat version)
 
@@ -12,16 +12,18 @@ ruby scripts/reduce-logs.rb 'make build' || exit 99
 # --------------------------------------------------
 echo "Copy Files"
 
+set -e
+
 rm -rf pkgroot
 mkdir -p pkgroot
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements"
 mkdir -p "$basedir"
-cp version "$basedir"
+cp version "$basedir/package-version"
 cp src/scripts/uninstall.sh "$basedir"
 cp src/scripts/uninstall_core.sh "$basedir"
 cp files/complex_modifications_rules_example.json "$basedir"
-cp -R "src/apps/Menu/build/Release/Karabiner-Menu.app" "$basedir"
+cp -R "src/apps/Menu/build_xcode/build/Release/Karabiner-Menu.app" "$basedir"
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements/scripts"
 mkdir -p "$basedir"
@@ -32,17 +34,18 @@ cp -R "src/vendor/Karabiner-VirtualHIDDevice/dist/uninstall.sh" "$basedir/uninst
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements/bin"
 mkdir -p "$basedir"
-cp src/bin/cli/build/Release/karabiner_cli "$basedir"
-cp src/core/console_user_server/build/Release/karabiner_console_user_server "$basedir"
-cp src/core/grabber/build/Release/karabiner_grabber "$basedir"
+cp src/bin/cli/build_xcode/build/Release/karabiner_cli "$basedir"
+cp src/core/console_user_server/build_xcode/build/Release/karabiner_console_user_server "$basedir"
+cp src/core/grabber/build_xcode/build/Release/karabiner_grabber "$basedir"
+cp src/core/observer/build_xcode/build/Release/karabiner_observer "$basedir"
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-Elements/updater"
 mkdir -p "$basedir"
-cp -R "src/apps/Updater/build/Release/Karabiner-Elements.app" "$basedir"
+cp -R "src/apps/Updater/build_xcode/build/Release/Karabiner-Elements.app" "$basedir"
 
-mkdir -p                  "pkgroot/Library"
+mkdir -p "pkgroot/Library"
 cp -R files/LaunchDaemons "pkgroot/Library"
-cp -R files/LaunchAgents  "pkgroot/Library"
+cp -R files/LaunchAgents "pkgroot/Library"
 
 basedir="pkgroot/Library/Application Support/org.pqrs/Karabiner-VirtualHIDDevice/Extensions"
 mkdir -p "$basedir"
@@ -50,8 +53,10 @@ cp -R src/vendor/Karabiner-VirtualHIDDevice/dist/org.pqrs.driver.Karabiner.Virtu
 
 basedir="pkgroot/Applications"
 mkdir -p "$basedir"
-cp -R "src/apps/PreferencesWindow/build/Release/Karabiner-Elements.app" "$basedir"
-cp -R "src/apps/EventViewer/build/Release/Karabiner-EventViewer.app" "$basedir"
+cp -R "src/apps/PreferencesWindow/build_xcode/build/Release/Karabiner-Elements.app" "$basedir"
+cp -R "src/apps/EventViewer/build_xcode/build/Release/Karabiner-EventViewer.app" "$basedir"
+
+set +e
 
 # Sign with Developer ID
 bash scripts/codesign.sh "pkgroot"
@@ -73,18 +78,18 @@ rm -rf $archiveName
 mkdir $archiveName
 
 pkgbuild \
-    --root pkgroot \
-    --component-plist pkginfo/pkgbuild.plist \
-    --scripts pkginfo/Scripts \
-    --identifier $pkgIdentifier \
-    --version $version \
-    --install-location "/" \
-    $archiveName/Installer.pkg
+	--root pkgroot \
+	--component-plist pkginfo/pkgbuild.plist \
+	--scripts pkginfo/Scripts \
+	--identifier $pkgIdentifier \
+	--version $version \
+	--install-location "/" \
+	$archiveName/Installer.pkg
 
 productbuild \
-    --distribution pkginfo/Distribution.xml \
-    --package-path $archiveName \
-    $archiveName/$pkgName
+	--distribution pkginfo/build/Distribution.xml \
+	--package-path $archiveName \
+	$archiveName/$pkgName
 
 rm -f $archiveName/Installer.pkg
 

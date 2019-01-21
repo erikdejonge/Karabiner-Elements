@@ -1,17 +1,7 @@
-#CONFIGURATION = Debug
-CONFIGURATION = Release
-
 all:
 	make -C ../../../lib/libkrbn
-	xcodebuild -alltargets -configuration $(CONFIGURATION) build
+	make build_xcode
 
-clean:
-	rm -rf build
-	rm -f *.xcodeproj/*.mode1
-	rm -f *.xcodeproj/*.mode1v3
-	rm -f *.xcodeproj/*.pbxuser
-	rm -rf *.xcodeproj/xcuserdata
-	rm -rf *.xcodeproj/project.xcworkspace/xcuserdata
+clean: clean_builds
 
-xcode:
-	open *.xcodeproj
+include ../../../Makefile.rules

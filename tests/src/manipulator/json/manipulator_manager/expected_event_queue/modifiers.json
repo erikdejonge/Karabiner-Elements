@@ -6,7 +6,7 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
+            "input_delay_duration": 0,
             "time_stamp": 100
         },
         "event_type": "key_down",
@@ -24,7 +24,7 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
+            "input_delay_duration": 0,
             "time_stamp": 200
         },
         "event_type": "key_up",
@@ -42,7 +42,7 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
+            "input_delay_duration": 0,
             "time_stamp": 300
         },
         "event_type": "key_down",
@@ -60,7 +60,7 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
+            "input_delay_duration": 0,
             "time_stamp": 400
         },
         "event_type": "key_up",
@@ -78,8 +78,8 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
-            "time_stamp": 401
+            "input_delay_duration": 0,
+            "time_stamp": 400
         },
         "event_type": "key_down",
         "lazy": true,
@@ -96,8 +96,8 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
-            "time_stamp": 402
+            "input_delay_duration": 0,
+            "time_stamp": 400
         },
         "event_type": "key_down",
         "lazy": false,
@@ -114,8 +114,8 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
-            "time_stamp": 403
+            "input_delay_duration": 0,
+            "time_stamp": 400
         },
         "event_type": "key_up",
         "lazy": true,
@@ -132,8 +132,8 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
-            "time_stamp": 404
+            "input_delay_duration": 0,
+            "time_stamp": 400
         },
         "event_type": "key_down",
         "lazy": true,
@@ -150,8 +150,8 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
-            "time_stamp": 504
+            "input_delay_duration": 0,
+            "time_stamp": 500
         },
         "event_type": "key_up",
         "lazy": false,
@@ -168,8 +168,8 @@
             "type": "key_code"
         },
         "event_time_stamp": {
-            "input_delay_time_stamp": 0,
-            "time_stamp": 604
+            "input_delay_duration": 0,
+            "time_stamp": 600
         },
         "event_type": "key_up",
         "lazy": false,

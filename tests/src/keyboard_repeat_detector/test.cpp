@@ -1,12 +1,7 @@
 #define CATCH_CONFIG_MAIN
-#include "../../vendor/catch/catch.hpp"
+#include <catch2/catch.hpp>
 
 #include "keyboard_repeat_detector.hpp"
-#include "thread_utility.hpp"
-
-TEST_CASE("initialize") {
-  krbn::thread_utility::register_main_thread();
-}
 
 TEST_CASE("is_repeating") {
   krbn::keyboard_repeat_detector keyboard_repeat_detector;
@@ -62,7 +57,7 @@ TEST_CASE("is_repeating") {
   // hid_value
 
   {
-    krbn::hid_value hid_value(0,
+    krbn::hid_value hid_value(krbn::absolute_time_point(0),
                               1,
                               *(krbn::types::make_hid_usage_page(krbn::key_code::spacebar)),
                               *(krbn::types::make_hid_usage(krbn::key_code::spacebar)));
@@ -70,7 +65,7 @@ TEST_CASE("is_repeating") {
     REQUIRE(keyboard_repeat_detector.is_repeating() == true);
   }
   {
-    krbn::hid_value hid_value(0,
+    krbn::hid_value hid_value(krbn::absolute_time_point(0),
                               0,
                               *(krbn::types::make_hid_usage_page(krbn::key_code::spacebar)),
                               *(krbn::types::make_hid_usage(krbn::key_code::spacebar)));
